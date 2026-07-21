@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Interativo de Vendas e Estoque - Amazon Aço</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- ApexCharts para gráficos interativos -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        amazonBlue: {
+                            50: '#f0f6fc', 100: '#e1edf8', 200: '#cbdcf2', 300: '#9cbce5',
+                            400: '#6495d4', 500: '#00529b', 600: '#003f7a', 700: '#002e5c',
+                            800: '#001e3d', 900: '#001024',
+                        },
+                        amazonRed: {
+                            50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca',
+                            500: '#d91a21', 600: '#b71218', 700: '#940a0e'
+                        },
+                        slateBg: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00529b; }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col selection:bg-amazonRed-200 selection:text-amazonRed-700">
+
+    <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3.5 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
+        <div class="flex items-center gap-4">
+            <div class="p-1 flex items-center justify-center">
+                <img src="https://amazonaco.com.br/wp-content/uploads/2024/02/IMG_4689.png" 
+                     alt="Amazon Aço" class="h-10 object-contain" 
+                     onerror="this.onerror=null; this.src='https://placehold.co/140x44/ffffff/002e5c?text=Amazon+Aço';">
+            </div>
+            <div class="h-6 w-[1px] bg-slate-200 hidden md:block"></div>
+            <div>
+                <h1 class="text-base font-bold tracking-tight text-slate-800 uppercase">Portal de Vendas & Estoque</h1>
+                <p class="text-[10px] text-slate-500 font-semibold tracking-wider uppercase">Conexão Direta Google Sheets</p>
+            </div>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2.5">
+            <span id="data-source-badge" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Links Não Sincronizados
+            </span>
+            <button onclick="triggerSync()" class="py-2 px-4 bg-[#b71218] hover:bg-[#940a0e] text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+                <i class="fa-solid fa-cloud-arrow-down"></i> Sincronizar Nuvem
+            </button>
+        </div>
+    </header>
+
+    <section class="bg-white border-b border-slate-200 p-5 shadow-sm">
+        <div class="max-w-7xl mx-auto space-y-3">
+            <div class="text-xs text-slate-500 font-semibold mb-2">
+                <i class="fa-solid fa-circle-info text-amazonBlue-500 mr-1"></i> As planilhas estão configuradas abaixo. Certifique-se de que estão públicas ("Qualquer pessoa com o link").
+            </div>
+            <div class="flex flex-col lg:flex-row items-stretch gap-4 justify-between">
+                
+                <!-- Card URL Vendas -->
+                <div class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 hover:border-amazonBlue-400/50 transition shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-csv text-emerald-600"></i> URL SD2 (Vendas)
+                        </span>
+                        <span id="status-vendas" class="text-slate-500 text-[10px] uppercase font-black flex items-center gap-1 bg-slate-200/50 px-2 py-0.5 rounded">
+                            <i class="fa-solid fa-circle-notch animate-spin text-amazonRed-500"></i> Desconectado
+                        </span>
+                    </div>
+                    <input type="text" id="url-vendas" placeholder="Cole o link do Google Sheets aqui..." 
+                           class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-[11px] text-slate-600 focus:outline-none focus:border-amazonBlue-500 transition"
+                           onchange="this.value = formatGoogleSheetsURL(this.value); saveConfigPaths()">
+                    <p class="text-[9px] text-slate-400 truncate" id="info-vendas">Aguardando link CSV.</p>
+                </div>
+
+                <!-- Card URL Saldos -->
+                <div class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 hover:border-amazonBlue-400/50 transition shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-boxes-stacked text-amber-600"></i> URL Saldos (Estoque)
+                        </span>
+                        <span id="status-saldos" class="text-slate-500 text-[10px] uppercase font-black flex items-center gap-1 bg-slate-200/50 px-2 py-0.5 rounded">
+                            <i class="fa-solid fa-circle-notch animate-spin text-amazonRed-500"></i> Desconectado
+                        </span>
+                    </div>
+                    <input type="text" id="url-saldos" placeholder="Cole o link do Google Sheets aqui..." 
+                           class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-[11px] text-slate-600 focus:outline-none focus:border-amazonBlue-500 transition"
+                           onchange="this.value = formatGoogleSheetsURL(this.value); saveConfigPaths()">
+                    <p class="text-[9px] text-slate-400 truncate" id="info-saldos">Aguardando link CSV.</p>
+                </div>
+
+                <!-- Card URL Dicionário -->
+                <div class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between gap-2.5 hover:border-amazonBlue-400/50 transition shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-book-bookmark text-indigo-600"></i> URL Dicionário (Mestre)
+                        </span>
+                        <span id="status-dicionario" class="text-slate-500 text-[10px] uppercase font-black flex items-center gap-1 bg-slate-200/50 px-2 py-0.5 rounded">
+                            <i class="fa-solid fa-circle-notch animate-spin text-amazonRed-500"></i> Desconectado
+                        </span>
+                    </div>
+                    <input type="text" id="url-dicionario" placeholder="Cole o link do Google Sheets aqui..." 
+                           class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-[11px] text-slate-600 focus:outline-none focus:border-amazonBlue-500 transition"
+                           onchange="this.value = formatGoogleSheetsURL(this.value); saveConfigPaths()">
+                    <p class="text-[9px] text-slate-400 truncate" id="info-dicionario">Aguardando link CSV.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <div class="max-w-7xl w-full mx-auto px-6 pt-6">
+        <div class="bg-gradient-to-r from-amazonBlue-600 to-amazonBlue-700 text-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div class="space-y-1">
+                <h2 class="text-xl font-bold tracking-tight">Painel Siderúrgico de Controle Integrado</h2>
+                <p class="text-xs text-amazonBlue-100 max-w-2xl">
+                    Sincronização em tempo real via Google Sheets. Gerencie cobertura de estoque, histórico de vendas e movimentações de materiais.
+                </p>
+                <div class="flex flex-wrap items-center gap-3 pt-2 text-[11px] text-amazonBlue-200">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amazonRed-500"></span> Classe A (Crítico/Giro)</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span> Outras Classes</span>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 flex flex-col justify-center min-w-[120px]">
+                    <span class="text-[9px] text-amazonBlue-200 font-bold uppercase tracking-wider">Última Venda Lida (SD2)</span>
+                    <span id="latest-sd2-date" class="text-sm font-black text-white mt-0.5"><i class="fa-solid fa-spinner fa-spin text-xs"></i></span>
+                </div>
+                <div class="bg-amazonBlue-800/40 border border-amazonBlue-400/30 rounded-xl px-4 py-2.5 text-right flex flex-col justify-center">
+                    <span class="text-[9px] text-amazonBlue-200 font-bold uppercase tracking-wider">Último Sync na Nuvem</span>
+                    <span id="last-sync-time" class="text-xs font-semibold text-white mt-0.5">Nunca sincronizado</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl w-full mx-auto px-6 pt-6 space-y-6">
+        
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div class="flex flex-col flex-wrap lg:flex-row items-end gap-4 justify-between w-full">
+                
+                <!-- Filtro por Filial -->
+                <div class="flex-1 min-w-[150px] space-y-1.5 relative">
+                    <label class="text-xs font-bold text-slate-600 flex items-center justify-between">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-building text-amazonBlue-500"></i> Filiais</span>
+                        <span id="branch-count-badge" class="text-[10px] text-amazonBlue-600 bg-amazonBlue-50 px-1.5 py-0.5 rounded font-extrabold border border-amazonBlue-200">Todas</span>
+                    </label>
+                    <button onclick="toggleDropdown(event, 'branch')" id="branch-dropdown-btn" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition flex items-center justify-between">
+                        <span class="truncate text-slate-500" id="branch-selected-text">Selecionar...</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs"></i>
+                    </button>
+                    <div id="branch-dropdown-list" class="hidden absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-50 space-y-2 max-h-60 overflow-y-auto font-medium">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-1">
+                            <button onclick="selectBranches(true)" class="text-[10px] text-amazonBlue-600 hover:text-amazonBlue-500 font-bold uppercase">Todas</button>
+                            <button onclick="selectBranches(false)" class="text-[10px] text-slate-500 hover:text-slate-400 font-bold uppercase">Nenhuma</button>
+                        </div>
+                        <div id="branch-checkboxes-container" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Armazéns de Estoque -->
+                <div class="flex-1 min-w-[150px] space-y-1.5 relative">
+                    <label class="text-xs font-bold text-slate-600 flex items-center justify-between">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-warehouse text-emerald-600"></i> Armazéns Estoque</span>
+                        <span id="saldos-warehouse-count-badge" class="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-extrabold border border-emerald-200">Todos</span>
+                    </label>
+                    <button onclick="toggleDropdown(event, 'saldos-warehouse')" id="saldos-warehouse-dropdown-btn" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition flex items-center justify-between">
+                        <span class="truncate text-slate-500" id="saldos-warehouse-selected-text">Selecionar...</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs"></i>
+                    </button>
+                    <div id="saldos-warehouse-dropdown-list" class="hidden absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-50 space-y-2 max-h-60 overflow-y-auto font-medium">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-1">
+                            <button onclick="selectWarehouses('saldos', true)" class="text-[10px] text-amazonBlue-600 hover:text-amazonBlue-500 font-bold uppercase">Todos</button>
+                            <button onclick="selectWarehouses('saldos', false)" class="text-[10px] text-slate-500 hover:text-slate-400 font-bold uppercase">Nenhum</button>
+                        </div>
+                        <div id="saldos-warehouse-checkboxes-container" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Armazéns de Vendas -->
+                <div class="flex-1 min-w-[150px] space-y-1.5 relative">
+                    <label class="text-xs font-bold text-slate-600 flex items-center justify-between">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-cart-shopping text-amazonBlue-500"></i> Armazéns Vendas</span>
+                        <span id="vendas-warehouse-count-badge" class="text-[10px] text-amazonBlue-600 bg-amazonBlue-50 px-1.5 py-0.5 rounded font-extrabold border border-amazonBlue-200">Todos</span>
+                    </label>
+                    <button onclick="toggleDropdown(event, 'vendas-warehouse')" id="vendas-warehouse-dropdown-btn" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition flex items-center justify-between">
+                        <span class="truncate text-slate-500" id="vendas-warehouse-selected-text">Selecionar...</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs"></i>
+                    </button>
+                    <div id="vendas-warehouse-dropdown-list" class="hidden absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-50 space-y-2 max-h-60 overflow-y-auto font-medium">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-1">
+                            <button onclick="selectWarehouses('vendas', true)" class="text-[10px] text-amazonBlue-600 hover:text-amazonBlue-500 font-bold uppercase">Todos</button>
+                            <button onclick="selectWarehouses('vendas', false)" class="text-[10px] text-slate-500 hover:text-slate-400 font-bold uppercase">Nenhum</button>
+                        </div>
+                        <div id="vendas-warehouse-checkboxes-container" class="space-y-1.5"></div>
+                    </div>
+                </div>
+
+                <!-- Novo Filtro de TES (Tipo Saida) -->
+                <div class="flex-1 min-w-[150px] space-y-1.5 relative">
+                    <label class="text-xs font-bold text-slate-600 flex items-center justify-between">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-right-left text-indigo-500"></i> Tipos (TES)</span>
+                        <span id="tes-count-badge" class="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-extrabold border border-indigo-200">Todas</span>
+                    </label>
+                    <button onclick="toggleDropdown(event, 'tes')" id="tes-dropdown-btn" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition flex items-center justify-between">
+                        <span class="truncate text-slate-500" id="tes-selected-text">Selecionar...</span>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs"></i>
+                    </button>
+                    <div id="tes-dropdown-list" class="hidden absolute left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg p-3 z-50 space-y-2 max-h-60 overflow-y-auto font-medium">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-1">
+                            <button onclick="selectTES(true)" class="text-[10px] text-amazonBlue-600 hover:text-amazonBlue-500 font-bold uppercase">Todas</button>
+                            <button onclick="selectTES(false)" class="text-[10px] text-slate-500 hover:text-slate-400 font-bold uppercase">Nenhuma</button>
+                        </div>
+                        <div id="tes-checkboxes-container" class="space-y-1.5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pesquisa de Produto Global -->
+            <div class="flex flex-col lg:flex-row items-end gap-4 mt-4 w-full">
+                <div class="flex-1 w-full space-y-1.5 relative">
+                    <label class="text-xs font-bold text-slate-600 flex justify-between items-center">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-barcode text-amazonBlue-500"></i> Material Ativo (Filtro Global)</span>
+                        <span id="global-um-badge" class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase font-bold">Todos</span>
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="global-product-code" placeholder="Digite o código do material ou descrição..." 
+                               class="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition font-bold"
+                               oninput="handleGlobalProductInput(this.value)"
+                               onkeydown="handleGlobalProductKeyDown(event)">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-xs text-slate-400"></i>
+                        <button id="btn-clear-global-product" onclick="clearGlobalProduct()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                    <div id="global-autocomplete-list" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 font-medium"></div>
+                </div>
+
+                <div class="w-full lg:w-auto">
+                    <button onclick="clearFilters()" class="w-full lg:w-auto px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-slate-200">
+                        <i class="fa-solid fa-filter-circle-xmark"></i> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast-container" class="hidden text-xs p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-center shadow-sm">
+            <i class="fa-solid fa-info-circle mr-1.5"></i> <span id="toast-message">Notificação</span>
+        </div>
+
+        <!-- Banner Global do Material Selecionado -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-amazonBlue-50 text-amazonBlue-600 rounded-xl border border-amazonBlue-100 shadow-sm">
+                        <i class="fa-solid fa-barcode text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-amazonRed-600 uppercase font-black tracking-wider">Material Ativo para Análise</span>
+                        <h3 id="sim-product-desc" class="text-sm font-bold text-slate-800 mt-0.5">Nenhum material selecionado. Use o filtro superior para iniciar.</h3>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-500 font-semibold italic text-left md:text-right">
+                    * Defina o material de análise na barra de busca superior.
+                </div>
+            </div>
+        </div>
+
+        <!-- Abas -->
+        <div class="flex border border-slate-200 bg-white p-1 rounded-xl gap-2 shadow-sm font-semibold overflow-x-auto">
+            <button onclick="switchTab('remanejamento')" id="tab-btn-remanejamento" class="flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition duration-200 bg-amazonBlue-600 text-white shadow-sm">
+                <i class="fa-solid fa-scale-balanced"></i> Simulador de Remanejamento
+            </button>
+            <button onclick="switchTab('vendas')" id="tab-btn-vendas" class="flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50">
+                <i class="fa-solid fa-chart-line"></i> Dashboard de Vendas
+            </button>
+            <button onclick="switchTab('estoque')" id="tab-btn-estoque" class="flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50">
+                <i class="fa-solid fa-warehouse"></i> Monitoramento de Estoque
+            </button>
+            <button onclick="switchTab('analitico')" id="tab-btn-analitico" class="flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition duration-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50">
+                <i class="fa-solid fa-magnifying-glass-chart"></i> Giro & Detalhado
+            </button>
+        </div>
+
+        <!-- ABA 1: SIMULADOR DE COBERTURA -->
+        <div id="tab-remanejamento" class="space-y-6">
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
+                    <div class="lg:col-span-5 space-y-1.5">
+                        <label class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                            <i class="fa-solid fa-truck-loading text-amazonBlue-500"></i> Quantidade a Solicitar
+                        </label>
+                        <input type="number" id="sim-qty" value="0" min="0"
+                               class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-bold focus:outline-none focus:border-amazonBlue-500 transition"
+                               onchange="sanitizeQuantityInput()" oninput="sanitizeQuantityInputOnInput()">
+                    </div>
+                    <div class="lg:col-span-4 space-y-1.5">
+                        <label class="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                            <i class="fa-solid fa-house-chimney-user text-amazonBlue-500"></i> Nossa Unidade (Destinatária)
+                        </label>
+                        <select id="sim-target-branch" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-800 font-bold focus:outline-none focus:border-amazonBlue-500 transition" onchange="recalculateSimulation()"></select>
+                    </div>
+                    <div class="lg:col-span-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center flex flex-col justify-center h-[68px] shadow-sm">
+                        <p class="text-[9px] text-emerald-700 font-bold uppercase tracking-wider">Teremos Saldo Total de</p>
+                        <h4 id="sim-total-saldo-pos" class="text-lg font-black text-emerald-600 mt-0.5">0 PC</h4>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sim-alert-box" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-sm font-semibold">
+                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
+                    <i class="fa-solid fa-triangle-exclamation text-amazonRed-500 animate-pulse"></i> ANÁLISE DE VIABILIDADE DO REMANEJAMENTO
+                </h4>
+                <div id="sim-alerts-container" class="space-y-2.5"></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm overflow-hidden font-medium">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amazonBlue-500"></span> Simulador de Cobertura de Filiais
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider bg-slate-50">
+                                <th class="py-3 px-4">Filiais</th><th class="py-3 px-3 text-center">ABC</th>
+                                <th class="py-3 px-3 text-center">Status</th><th class="py-3 px-3 text-center">Cobertura (Mês)</th>
+                                <th class="py-3 px-3 text-right">Saldo Atual</th><th class="py-3 px-3 text-right bg-slate-100 text-amazonBlue-700">Saldo Pós Envio</th>
+                                <th class="py-3 px-3 text-right">Qtde Vendida (Período)</th><th class="py-3 px-3 text-right">Média Mês Qtde</th>
+                                <th class="py-3 px-3 text-right">Média Mês Fat</th><th class="py-3 px-4 text-right">DIF (Atual - Vendido)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sim-tbody" class="divide-y divide-slate-100 text-slate-600">
+                            <tr><td colspan="10" class="py-6 text-center text-slate-400">Aguardando dados da nuvem.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm font-medium">
+                <h3 class="text-sm font-bold text-slate-800 mb-4">Análise Mensal de Vendas Fatiada (Qtde)</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead><tr id="sim-fatiada-thead" class="border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider bg-slate-50"><th class="py-3 px-4">Filiais</th></tr></thead>
+                        <tbody id="sim-fatiada-tbody" class="divide-y divide-slate-100 text-slate-600"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA 2: DASHBOARD DE VENDAS -->
+        <div id="tab-vendas" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col xl:flex-row items-start xl:items-center gap-4 justify-between shadow-sm">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-amazonBlue-50 text-amazonBlue-600 rounded-xl border border-amazonBlue-100 font-bold"><i class="fa-solid fa-calendar-days text-base"></i></div>
+                    <div><h4 class="text-sm font-bold text-slate-800">Período de Análise</h4></div>
+                </div>
+                <div class="flex flex-col md:flex-row flex-wrap gap-3 w-full xl:w-auto justify-end font-semibold">
+                    <div class="flex gap-2"><button id="btn-period-current" onclick="setPeriod('current')" class="btn-period">Mês Atual</button><button id="btn-period-6months" onclick="setPeriod('6months')" class="btn-period">6 Meses</button><button id="btn-period-1year" onclick="setPeriod('1year')" class="btn-period">1 Ano</button><button id="btn-period-custom" onclick="setPeriod('custom')" class="btn-period active">Personalizado</button></div>
+                    <div id="custom-period-selectors" class="flex gap-2">
+                        <select id="sales-period-from" class="bg-white border border-slate-300 rounded-xl px-2 py-1 text-xs" onchange="applyCustomPeriod()"></select>
+                        <select id="sales-period-to" class="bg-white border border-slate-300 rounded-xl px-2 py-1 text-xs" onchange="applyCustomPeriod()"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 relative overflow-hidden shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase">Faturamento Total</p><h3 id="kpi-faturamento" class="text-xl font-black mt-1.5 text-slate-800">R$ 0,00</h3></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 relative overflow-hidden shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase">Qtd Vendida</p><div class="mt-2 font-bold"><span id="kpi-qtd-vendas-pc" class="block text-base text-slate-800">0 PC</span><span id="kpi-qtd-vendas-kg" class="text-xs text-amazonRed-500">0,00 KG</span></div></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 relative overflow-hidden shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase">Estoque Total</p><div class="mt-2 font-bold"><span id="kpi-estoque-pc" class="block text-base text-slate-800">0 PC</span><span id="kpi-estoque-kg" class="text-xs text-emerald-600">0,00 KG</span></div></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 relative overflow-hidden shadow-sm"><p class="text-[10px] font-bold text-slate-400 uppercase">Ticket Médio</p><h3 id="kpi-ticket" class="text-xl font-black mt-1.5 text-slate-800">R$ 0,00</h3></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 font-semibold">
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 lg:col-span-2 shadow-sm"><h3 class="text-sm font-bold mb-4">Evolução Faturamento</h3><div id="sales-trend-chart" class="h-80 w-full"></div></div>
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><h3 class="text-sm font-bold mb-4">Faturamento por Filial</h3><div id="sales-branch-chart" class="h-80 w-full"></div></div>
+            </div>
+            
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm font-medium">
+                <h3 class="text-sm font-bold text-slate-800 mb-4">Top 10 Produtos</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead><tr class="border-b text-slate-500 text-xs uppercase font-bold bg-slate-50"><th class="py-3 px-4">Código</th><th class="py-3 px-4">Qtd</th><th class="py-3 px-4">Faturamento</th><th class="py-3 px-4">Ação</th></tr></thead>
+                        <tbody id="top-products-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA 3: ESTOQUE -->
+        <div id="tab-estoque" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 font-semibold">
+                <div class="bg-white border rounded-2xl p-5 shadow-sm"><h3 class="text-sm font-bold mb-4">Saldo Físico por Filial</h3><div id="stock-distribution-chart" class="h-80"></div></div>
+                <div class="bg-white border rounded-2xl p-5 shadow-sm flex flex-col justify-center gap-4">
+                    <div class="p-4 bg-slate-50 rounded-xl flex justify-between shadow-sm"><span class="text-xs font-bold text-slate-600">Total SKUs</span><span id="summary-unique-skus" class="text-sm font-bold">0</span></div>
+                    <div class="p-4 bg-slate-50 rounded-xl flex justify-between shadow-sm"><span class="text-xs font-bold text-slate-600">Armazéns Ativos</span><span id="summary-active-warehouses" class="text-sm font-bold">0</span></div>
+                </div>
+            </div>
+            <div class="bg-white border rounded-2xl p-5 shadow-sm font-medium">
+                <h3 class="text-sm font-bold text-slate-800 mb-4">Alertas de Ruptura (Estoque < 50% das Vendas)</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead><tr class="border-b text-slate-500 text-xs uppercase font-bold bg-slate-50"><th class="py-3 px-4">Código</th><th class="py-3 px-4">Filial</th><th class="py-3 px-4">Estoque/Vendas</th><th class="py-3 px-4 text-right">Status</th></tr></thead>
+                        <tbody id="critical-stock-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABA 4: ANALÍTICO -->
+        <div id="tab-analitico" class="hidden space-y-6">
+            <div class="bg-white border rounded-2xl p-5 shadow-sm font-medium">
+                <h3 class="text-sm font-bold text-slate-800 mb-4">Giro & Inventário Detalhado</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead><tr class="border-b text-slate-500 text-xs uppercase font-bold bg-slate-50"><th class="py-3 px-4">Código</th><th class="py-3 px-4">Descrição</th><th class="py-3 px-4">Filial</th><th class="py-3 px-4">Armazém</th><th class="py-3 px-4 text-right">Qtde</th></tr></thead>
+                        <tbody id="search-results-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DIC_FILIAIS = { 1: "01 - Alvorada", 2: "02 - Matriz CD", 4: "04 - Raiz", 5: "05 - Cidade Nova", 6: "06 - Jorge Teixeira" };
+        const MONTH_NAMES = { "01": "Jan", "02": "Fev", "03": "Mar", "04": "Abr", "05": "Mai", "06": "Jun", "07": "Jul", "08": "Ago", "09": "Set", "10": "Out", "11": "Nov", "12": "Dez" };
+
+        function formatGoogleSheetsURL(url) {
+            if (!url) return "";
+            if (url.includes("tqx=out:csv")) return url;
+            const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (match) {
+                const id = match[1];
+                let gid = "0";
+                const gidMatch = url.match(/[#&]gid=([0-9]+)/);
+                if (gidMatch) gid = gidMatch[1];
+                return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&gid=${gid}`;
+            }
+            return url;
+        }
+
+        function normalizeProductCode(code) {
+            if (code === undefined || code === null) return '';
+            let s = String(code).trim();
+            let num = s * 1;
+            if (!isNaN(num) && s.length > 0 && s.length < 8) {
+                return String(num).padStart(8, '0');
+            }
+            return s;
+        }
+
+        function parseCSV(text) {
+            const result = [];
+            let row = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+                if (inQuotes) {
+                    if (char === '"' && nextChar === '"') { cell += '"'; i++; }
+                    else if (char === '"') { inQuotes = false; }
+                    else { cell += char; }
+                } else {
+                    if (char === '"') { inQuotes = true; }
+                    else if (char === ',') { row.push(cell); cell = ''; }
+                    else if (char === '\n' || (char === '\r' && nextChar === '\n')) {
+                        row.push(cell); result.push(row); row = []; cell = '';
+                        if (char === '\r') i++;
+                    } else if (char !== '\r') { cell += char; }
+                }
+            }
+            if (cell || text[text.length - 1] === ',') row.push(cell);
+            if (row.length > 0) result.push(row);
+            if (result.length < 2) return [];
+
+            const headers = result[0].map(h => h.trim());
+            const objects = [];
+            for (let i = 1; i < result.length; i++) {
+                if (result[i].length <= 1 && result[i][0] === '') continue;
+                let obj = {};
+                for (let j = 0; j < headers.length; j++) {
+                    obj[headers[j]] = result[i][j] !== undefined ? result[i][j].trim() : '';
+                }
+                objects.push(obj);
+            }
+            return objects;
+        }
+
+        let rawSaldos = [], rawVendas = [], rawDicionario = [];
+        let filteredSaldos = [], filteredVendas = [];
+        
+        let activeSaldosWarehouses = [], selectedSaldosWarehouses = [];
+        let activeVendasWarehouses = [], selectedVendasWarehouses = [];
+        let activeBranches = [], selectedBranches = [];
+        let activeTES = [], selectedTES = [];
+
+        let globalSelectedProductCode = "";
+        let salesFromPeriod = "", salesToPeriod = "";
+        let currentPeriodType = 'custom';
+        let chartSalesTrend = null, chartSalesBranch = null, chartStockDistribution = null;
+        let isSingleMonthView = false;
+        let MONTHS_ANALYSIS = [];
+
+        const DB_NAME = 'PortalVendasEstoque_DB';
+        let db;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 2);
+                request.onerror = () => reject("Erro ao abrir IndexedDB.");
+                request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+                request.onupgradeneeded = (e) => {
+                    const dbInstance = e.target.result;
+                    if(!dbInstance.objectStoreNames.contains("arquivos_cache")) {
+                        dbInstance.createObjectStore("arquivos_cache", { keyPath: "tipo" });
+                    }
+                };
+            });
+        }
+
+        function salvarCache(tipo, data) {
+            if (!db) return;
+            db.transaction(["arquivos_cache"], "readwrite").objectStore("arquivos_cache").put({ tipo: tipo, dados: data, timestamp: new Date().toISOString() });
+        }
+
+        function obterCache(tipo) {
+            return new Promise((resolve) => {
+                if (!db) return resolve(null);
+                const req = db.transaction(["arquivos_cache"], "readonly").objectStore("arquivos_cache").get(tipo);
+                req.onsuccess = (e) => resolve(e.target.result || null);
+                req.onerror = () => resolve(null);
+            });
+        }
+
+        async function fetchCSV(url) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const text = await response.text();
+            return parseCSV(text);
+        }
+
+        async function triggerSync() {
+            const urlVendas = document.getElementById("url-vendas").value.trim();
+            const urlSaldos = document.getElementById("url-saldos").value.trim();
+            const urlDic = document.getElementById("url-dicionario").value.trim();
+
+            if (!urlVendas || !urlSaldos) {
+                showToast("Insira os links do Google Sheets!");
+                return;
+            }
+
+            const syncBtn = document.querySelector(".fa-cloud-arrow-down");
+            if(syncBtn) { syncBtn.classList.replace("fa-cloud-arrow-down", "fa-spinner"); syncBtn.classList.add("fa-spin"); }
+
+            try {
+                const fetchPromises = [];
+                if(urlVendas) fetchPromises.push(fetchCSV(urlVendas).then(data => ({type: 'vendas', data})));
+                if(urlSaldos) fetchPromises.push(fetchCSV(urlSaldos).then(data => ({type: 'saldos', data})));
+                if(urlDic) fetchPromises.push(fetchCSV(urlDic).then(data => ({type: 'dicionario', data})));
+
+                const results = await Promise.all(fetchPromises);
+                
+                results.forEach(res => {
+                    if (res.type === 'vendas') processVendas(res.data);
+                    if (res.type === 'saldos') processSaldos(res.data);
+                    if (res.type === 'dicionario') processDicionario(res.data);
+                });
+
+                const dataAtual = `Último sync: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
+                localStorage.setItem("portal_last_sync_time", dataAtual);
+                document.getElementById("last-sync-time").innerText = dataAtual;
+
+                buildFilters();
+                processAndPopulate();
+                recalculateSimulation();
+                
+                document.getElementById("data-source-badge").className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5";
+                document.getElementById("data-source-badge").innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Online e Sincronizado`;
+                
+                showToast("Dados atualizados da nuvem com sucesso!");
+
+            } catch(e) {
+                console.error("Erro de CORS ou Link:", e);
+                showToast("Falha de Acesso. Verifique se as planilhas estão públicas ('Qualquer pessoa com o link').");
+                document.getElementById("data-source-badge").className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-center gap-1.5";
+                document.getElementById("data-source-badge").innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Erro de Conexão`;
+            } finally {
+                if(syncBtn) { syncBtn.classList.remove("fa-spin", "fa-spinner"); syncBtn.classList.add("fa-cloud-arrow-down"); }
+            }
+        }
+
+        function parseBRFloat(str) {
+            if (!str) return 0;
+            let s = String(str).replace(/[R$\s]/g, '');
+            s = s.replace(/\./g, '');
+            s = s.replace(',', '.');
+            return parseFloat(s) || 0;
+        }
+
+        function convertDateBRtoISO(dateStr) {
+            if (!dateStr) return 'Data N/D';
+            const parts = String(dateStr).split('/');
+            if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            return dateStr;
+        }
+
+        function processVendas(parsedData) {
+            rawVendas = parsedData.map(v => ({
+                Filial: parseInt(v['Filial']) || 1,
+                Produto: normalizeProductCode(v['Produto']),
+                Quantidade: parseBRFloat(v['Quantidade']),
+                "Vlr.Unitario": parseBRFloat(v['Vlr.Unitario']),
+                "Vlr.Total": parseBRFloat(v['Vlr.Total']),
+                TipoSaida: String(v['Tipo Saida'] || '').trim(),
+                Armazem: parseInt(v['Armazem']) || 1,
+                Emissao: convertDateBRtoISO(v['Emissao']),
+                Unidade: 'PC'
+            })).filter(v => v.Produto);
+            salvarCache('vendas', rawVendas);
+            atualizarStatusVinculo('vendas', 'Conectado', new Date().toISOString(), true);
+            calculateLatestSaleDate();
+        }
+
+        function processSaldos(parsedData) {
+            rawSaldos = parsedData.map(s => ({
+                Produto: normalizeProductCode(s['Produto']),
+                Descricao: String(s['Descricao'] || 'PRODUTO SEM DESCRIÇÃO'),
+                Grupo: String(s['Grupo'] || 'Outros'),
+                Filial: parseInt(s['Filial']) || 1,
+                Armazem: parseInt(s['Armazem']) || 1,
+                "Qtde.1a.U.M.": parseBRFloat(s['Qtde.1a.U.M.']),
+                Unidade: String(s['Unidade'] || 'PC').trim()
+            })).filter(s => s.Produto);
+            salvarCache('saldos', rawSaldos);
+            atualizarStatusVinculo('saldos', 'Conectado', new Date().toISOString(), true);
+        }
+
+        function processDicionario(parsedData) {
+            rawDicionario = parsedData.map(d => ({
+                Produto: normalizeProductCode(d['Código']), 
+                Descricao: String(d['Descricao Sistema'] || 'PRODUTO SEM DESCRIÇÃO').trim(),
+                Unidade: String(d['UM'] || 'PC').trim()
+            })).filter(d => d.Produto);
+            salvarCache('dicionario', rawDicionario);
+            atualizarStatusVinculo('dicionario', 'Conectado', new Date().toISOString(), true);
+        }
+
+        window.onload = async function() {
+            try {
+                await initDB();
+                loadConfigPaths();
+
+                const cachedSaldos = await obterCache('saldos');
+                const cachedVendas = await obterCache('vendas');
+                const cachedDic = await obterCache('dicionario');
+
+                if (cachedDic) { rawDicionario = cachedDic.dados; atualizarStatusVinculo('dicionario', 'Em Cache', cachedDic.timestamp, true); }
+                if (cachedSaldos && cachedVendas) {
+                    rawSaldos = cachedSaldos.dados;
+                    rawVendas = cachedVendas.dados;
+                    document.getElementById("data-source-badge").className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5";
+                    document.getElementById("data-source-badge").innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Lendo do Cache`;
+                    atualizarStatusVinculo('vendas', 'Em Cache', cachedVendas.timestamp, true);
+                    atualizarStatusVinculo('saldos', 'Em Cache', cachedSaldos.timestamp, true);
+                    calculateLatestSaleDate();
+                }
+
+                buildFilters();
+                buildTargetBranchSelect();
+                processAndPopulate();
+
+                window.addEventListener('click', e => {
+                    ['branch', 'saldos-warehouse', 'vendas-warehouse', 'tes'].forEach(t => {
+                        const d = document.getElementById(`${t}-dropdown-list`);
+                        const b = document.getElementById(`${t}-dropdown-btn`);
+                        if(d && !d.contains(e.target) && !b.contains(e.target)) d.classList.add("hidden");
+                    });
+                    const ac = document.getElementById("global-autocomplete-list");
+                    if (ac && !ac.contains(e.target) && e.target.id !== "global-product-code") ac.classList.add("hidden");
+                });
+
+            } catch (error) { console.error(error); }
+        };
+
+        function showToast(message) {
+            const c = document.getElementById("toast-container");
+            document.getElementById("toast-message").innerText = message;
+            c.classList.remove("hidden");
+            setTimeout(() => c.classList.add("hidden"), 4000);
+        }
+
+        function calculateLatestSaleDate() {
+            let maxDateStr = "";
+            rawVendas.forEach(v => {
+                if (v.Emissao && v.Emissao !== 'Data N/D') {
+                    if (!maxDateStr || v.Emissao > maxDateStr) maxDateStr = v.Emissao;
+                }
+            });
+            if (maxDateStr) {
+                const parts = maxDateStr.split('-');
+                document.getElementById("latest-sd2-date").innerText = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            } else {
+                document.getElementById("latest-sd2-date").innerText = "N/D";
+            }
+        }
+
+        function saveConfigPaths() {
+            localStorage.setItem("portal_url_vendas", document.getElementById("url-vendas").value);
+            localStorage.setItem("portal_url_saldos", document.getElementById("url-saldos").value);
+            localStorage.setItem("portal_url_dicionario", document.getElementById("url-dicionario").value);
+        }
+
+        function loadConfigPaths() {
+            const defaultVendas = formatGoogleSheetsURL("https://docs.google.com/spreadsheets/d/1tC4vM8B-kfu3RJ4GhIFOSw3v-xDiR16q-x7SPA6UdK4/edit?gid=1517514347");
+            const defaultSaldos = formatGoogleSheetsURL("https://docs.google.com/spreadsheets/d/1Jatt76QyCs0OlwUuLM19a58JoJ01oK-DD8UVKPFhQV4/edit?gid=0");
+            const defaultDic = formatGoogleSheetsURL("https://docs.google.com/spreadsheets/d/1cGUFGI0W3Y4nHdMHQo6K3gLhp3pVtJizdPrwEhYemfM/edit?gid=0");
+
+            document.getElementById("url-vendas").value = localStorage.getItem("portal_url_vendas") || defaultVendas;
+            document.getElementById("url-saldos").value = localStorage.getItem("portal_url_saldos") || defaultSaldos;
+            document.getElementById("url-dicionario").value = localStorage.getItem("portal_url_dicionario") || defaultDic;
+            document.getElementById("last-sync-time").innerText = localStorage.getItem("portal_last_sync_time") || "Nunca sincronizado";
+        }
+
+        function atualizarStatusVinculo(tipo, statusText, timestamp, isConectado) {
+            const statusEl = document.getElementById(`status-${tipo}`);
+            if (isConectado) {
+                statusEl.innerHTML = `<i class="fa-solid fa-link text-emerald-600"></i> ${statusText}`;
+                statusEl.className = "text-emerald-700 text-[10px] uppercase font-bold flex gap-1 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200";
+                document.getElementById(`info-${tipo}`).innerText = `Sincronizado: ${new Date(timestamp).toLocaleString('pt-BR')}`;
+            }
+        }
+
+        function getFilialName(id) { return DIC_FILIAIS[id] || `Filial ${id}`; }
+
+        function buildFilters() {
+            const setSaldosW = new Set(), setVendasW = new Set(), setBranches = new Set(), setTES = new Set();
+            
+            rawSaldos.forEach(s => { if(s.Armazem) setSaldosW.add(s.Armazem); if(s.Filial) setBranches.add(s.Filial); });
+            rawVendas.forEach(v => { 
+                if(v.Armazem) setVendasW.add(v.Armazem); 
+                if(v.Filial) setBranches.add(v.Filial); 
+                if(v.TipoSaida) setTES.add(v.TipoSaida); 
+            });
+            
+            activeSaldosWarehouses = Array.from(setSaldosW).sort((a,b)=>a-b);
+            activeVendasWarehouses = Array.from(setVendasW).sort((a,b)=>a-b);
+            activeBranches = Array.from(setBranches).sort((a,b)=>a-b);
+            activeTES = Array.from(setTES).sort();
+
+            selectedSaldosWarehouses = [...activeSaldosWarehouses];
+            selectedVendasWarehouses = [...activeVendasWarehouses];
+            selectedBranches = [...activeBranches];
+            selectedTES = [...activeTES];
+
+            renderFilterCheckboxes('saldos-warehouse', activeSaldosWarehouses, selectedSaldosWarehouses, 'Armazém');
+            renderFilterCheckboxes('vendas-warehouse', activeVendasWarehouses, selectedVendasWarehouses, 'Armazém');
+            renderFilterCheckboxes('branch', activeBranches, selectedBranches, '', getFilialName);
+            renderFilterCheckboxes('tes', activeTES, selectedTES, 'TES');
+            
+            updateFilterText('saldos-warehouse', activeSaldosWarehouses, selectedSaldosWarehouses, 'Armazéns');
+            updateFilterText('vendas-warehouse', activeVendasWarehouses, selectedVendasWarehouses, 'Armazéns');
+            updateFilterText('branch', activeBranches, selectedBranches, 'Filiais');
+            updateFilterText('tes', activeTES, selectedTES, 'TES');
+        }
+
+        function renderFilterCheckboxes(prefix, activeList, selectedList, labelPrefix, nameFormatter = val => val) {
+            const container = document.getElementById(`${prefix}-checkboxes-container`);
+            if(!container) return;
+            container.innerHTML = "";
+            if (activeList.length === 0) return container.innerHTML = `<span class="text-xs text-slate-400">Vazio.</span>`;
+            
+            activeList.forEach(val => {
+                const isChecked = selectedList.includes(val);
+                const display = labelPrefix ? `${labelPrefix} ${val}` : nameFormatter(val);
+                container.innerHTML += `
+                    <div class="flex items-center justify-between text-xs hover:bg-slate-50 p-1.5 rounded transition">
+                        <label class="flex items-center gap-2 cursor-pointer text-slate-700 w-full">
+                            <input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} 
+                                   onchange="toggleFilter('${prefix}', '${val}')" class="rounded text-amazonBlue-600 focus:ring-0 border-slate-300">
+                            <span>${display}</span>
+                        </label>
+                    </div>`;
+            });
+        }
+
+        function toggleFilter(prefix, strValue) {
+            let selectedList, activeList, labelName;
+            const isNumeric = prefix !== 'tes';
+            const value = isNumeric ? parseInt(strValue) : strValue;
+
+            if(prefix === 'branch') { selectedList = selectedBranches; activeList = activeBranches; labelName = 'Filiais'; }
+            if(prefix === 'saldos-warehouse') { selectedList = selectedSaldosWarehouses; activeList = activeSaldosWarehouses; labelName = 'Armazéns'; }
+            if(prefix === 'vendas-warehouse') { selectedList = selectedVendasWarehouses; activeList = activeVendasWarehouses; labelName = 'Armazéns'; }
+            if(prefix === 'tes') { selectedList = selectedTES; activeList = activeTES; labelName = 'TES'; }
+
+            const cb = document.querySelector(`#${prefix}-checkboxes-container input[value="${strValue}"]`);
+            if (cb && cb.checked) { if (!selectedList.includes(value)) selectedList.push(value); } 
+            else { const idx = selectedList.indexOf(value); if (idx > -1) selectedList.splice(idx, 1); }
+
+            updateFilterText(prefix, activeList, selectedList, labelName);
+            applyFilters(); recalculateSimulation();
+        }
+
+        function selectBranches(selectAll) { selectedBranches = selectAll ? [...activeBranches] : []; updateFilterGroup('branch', selectedBranches); }
+        function selectWarehouses(type, selectAll) {
+            if(type==='saldos') { selectedSaldosWarehouses = selectAll ? [...activeSaldosWarehouses] : []; updateFilterGroup('saldos-warehouse', selectedSaldosWarehouses); }
+            else { selectedVendasWarehouses = selectAll ? [...activeVendasWarehouses] : []; updateFilterGroup('vendas-warehouse', selectedVendasWarehouses); }
+        }
+        function selectTES(selectAll) { selectedTES = selectAll ? [...activeTES] : []; updateFilterGroup('tes', selectedTES); }
+
+        function updateFilterGroup(prefix, selectedList) {
+            const checkboxes = document.querySelectorAll(`#${prefix}-checkboxes-container input[type='checkbox']`);
+            checkboxes.forEach(cb => cb.checked = selectedList.length > 0);
+            const activeList = prefix === 'branch' ? activeBranches : prefix === 'saldos-warehouse' ? activeSaldosWarehouses : prefix === 'vendas-warehouse' ? activeVendasWarehouses : activeTES;
+            updateFilterText(prefix, activeList, selectedList, prefix === 'tes' ? 'TES' : prefix.includes('warehouse') ? 'Armazéns' : 'Filiais');
+            applyFilters(); recalculateSimulation();
+        }
+
+        function updateFilterText(prefix, activeList, selectedList, pluralName) {
+            const badge = document.getElementById(`${prefix}-count-badge`);
+            const btnText = document.getElementById(`${prefix}-selected-text`);
+            if(!badge || !btnText) return;
+            const isBlue = prefix.includes('vendas') || prefix === 'branch' || prefix === 'tes';
+            const colorClass = prefix === 'tes' ? 'indigo' : isBlue ? 'amazonBlue' : 'emerald';
+
+            if (selectedList.length === activeList.length && activeList.length > 0) {
+                badge.innerText = "Todas"; badge.className = `text-[10px] text-${colorClass}-600 bg-${colorClass}-50 border border-${colorClass}-200 px-1.5 py-0.5 rounded font-bold`;
+                btnText.innerText = `Todos(as)`;
+            } else if (selectedList.length === 0) {
+                badge.innerText = "Zero"; badge.className = "text-[10px] text-amazonRed-500 bg-amazonRed-50 border border-amazonRed-100 px-1.5 py-0.5 rounded font-bold";
+                btnText.innerText = "Nenhum";
+            } else {
+                badge.innerText = `${selectedList.length}/${activeList.length}`; badge.className = `text-[10px] text-${colorClass}-600 bg-${colorClass}-50 border border-${colorClass}-100 px-1.5 py-0.5 rounded font-bold`;
+                btnText.innerText = `${selectedList.length} ${pluralName}`;
+            }
+        }
+
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            ['branch', 'saldos-warehouse', 'vendas-warehouse', 'tes'].forEach(d => {
+                if(d !== id) { const el = document.getElementById(`${d}-dropdown-list`); if(el) el.classList.add("hidden"); }
+            });
+            document.getElementById(`${id}-dropdown-list`).classList.toggle("hidden");
+        }
+
+        function buildTargetBranchSelect() {
+            const s = document.getElementById("sim-target-branch"); 
+            if(!s) return;
+            s.innerHTML = "";
+            Object.keys(DIC_FILIAIS).forEach(id => s.innerHTML += `<option value="${id}">${DIC_FILIAIS[id]}</option>`);
+        }
+
+        function handleGlobalProductInput(value) {
+            const list = document.getElementById("global-autocomplete-list"); list.innerHTML = "";
+            if (!value.trim()) return list.classList.add("hidden");
+            const term = value.toLowerCase().trim();
+            const norm = normalizeProductCode(value);
+            const prods = {};
+            
+            rawDicionario.forEach(d => { if(d.Produto.includes(norm) || d.Descricao.toLowerCase().includes(term)) prods[d.Produto] = d.Descricao; });
+            rawSaldos.forEach(s => { if(s.Produto.includes(norm) || s.Descricao.toLowerCase().includes(term)) if(!prods[s.Produto]) prods[s.Produto] = s.Descricao; });
+
+            const keys = Object.keys(prods).slice(0,10);
+            if(keys.length === 0) return list.classList.add("hidden");
+            
+            keys.forEach(k => {
+                const div = document.createElement("div"); div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer truncate";
+                div.innerHTML = `<span class="font-bold text-amazonBlue-600 mr-2">${k}</span> ${prods[k]}`;
+                div.onclick = () => { selectGlobalProduct(k); list.classList.add("hidden"); };
+                list.appendChild(div);
+            });
+            list.classList.remove("hidden");
+        }
+
+        function handleGlobalProductKeyDown(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const list = document.getElementById("global-autocomplete-list");
+                const first = list.querySelector("div");
+                if (first) first.click(); else if (e.target.value) selectGlobalProduct(e.target.value);
+                list.classList.add("hidden");
+            }
+        }
+
+        function selectGlobalProduct(code) {
+            globalSelectedProductCode = normalizeProductCode(code);
+            document.getElementById("global-product-code").value = globalSelectedProductCode;
+            document.getElementById("btn-clear-global-product").classList.remove("hidden");
+            applyFilters(); recalculateSimulation();
+        }
+
+        function clearGlobalProduct() {
+            globalSelectedProductCode = "";
+            document.getElementById("global-product-code").value = "";
+            document.getElementById("btn-clear-global-product").classList.add("hidden");
+            applyFilters(); recalculateSimulation();
+        }
+
+        function getPeriodKeys() {
+            const s = new Set();
+            rawVendas.forEach(v => { if (v.Emissao && v.Emissao !== 'Data N/D') s.add(v.Emissao.substring(0, 7)); });
+            return Array.from(s).sort();
+        }
+
+        function populateSalesPeriods() {
+            const keys = getPeriodKeys();
+            if(keys.length === 0) return;
+            const from = document.getElementById("sales-period-from"), to = document.getElementById("sales-period-to");
+            if(!from || !to) return;
+            from.innerHTML = ""; to.innerHTML = "";
+            keys.forEach(p => {
+                const [y, m] = p.split("-"); const l = `${MONTH_NAMES[m]} / ${y}`;
+                from.innerHTML += `<option value="${p}">${l}</option>`; to.innerHTML += `<option value="${p}">${l}</option>`;
+            });
+            from.value = keys[0]; to.value = keys[keys.length-1];
+            salesFromPeriod = from.value; salesToPeriod = to.value;
+        }
+
+        function setPeriod(type) {
+            currentPeriodType = type;
+            document.querySelectorAll(".btn-period").forEach(b => {
+                b.className = b.id === `btn-period-${type}` ? "flex-1 px-3 py-1.5 text-xs font-bold rounded-lg transition bg-white text-amazonBlue-600 shadow-sm border border-slate-200" : "flex-1 px-3 py-1.5 text-xs font-bold rounded-lg transition text-slate-600 hover:bg-slate-200";
+            });
+            const customSel = document.getElementById("custom-period-selectors");
+            if(customSel) customSel.classList.toggle("hidden", type !== 'custom');
+
+            const keys = getPeriodKeys(); if(keys.length === 0) return;
+            let f = keys[0], t = keys[keys.length-1];
+
+            if(type === 'current') { f = t; }
+            else if(type === '6months' && keys.length >= 6) { f = keys[keys.length-6]; }
+            else if(type === '1year' && keys.length >= 12) { f = keys[keys.length-12]; }
+            else if(type === 'custom') { 
+                const fEl = document.getElementById("sales-period-from");
+                const tEl = document.getElementById("sales-period-to");
+                if(fEl && tEl) { f = fEl.value; t = tEl.value; }
+            }
+
+            salesFromPeriod = f; salesToPeriod = t;
+            const fEl = document.getElementById("sales-period-from");
+            const tEl = document.getElementById("sales-period-to");
+            if(fEl) fEl.value = f; 
+            if(tEl) tEl.value = t;
+            applyFilters();
+        }
+
+        function applyCustomPeriod() { setPeriod('custom'); }
+
+        function processAndPopulate() {
+            populateSalesPeriods();
+            applyFilters();
+        }
+
+        function applyFilters() {
+            isSingleMonthView = (salesFromPeriod === salesToPeriod);
+
+            filteredSaldos = rawSaldos.filter(i => 
+                selectedBranches.includes(i.Filial) && 
+                selectedSaldosWarehouses.includes(i.Armazem) && 
+                (!globalSelectedProductCode || i.Produto === globalSelectedProductCode)
+            );
+
+            filteredVendas = rawVendas.filter(i => {
+                if(!selectedBranches.includes(i.Filial)) return false;
+                if(!selectedVendasWarehouses.includes(i.Armazem)) return false;
+                if(!selectedTES.includes(i.TipoSaida)) return false;
+                if(globalSelectedProductCode && i.Produto !== globalSelectedProductCode) return false;
+                
+                if (i.Emissao && i.Emissao !== 'Data N/D') {
+                    const ym = i.Emissao.substring(0, 7);
+                    if (salesFromPeriod && ym < salesFromPeriod) return false;
+                    if (salesToPeriod && ym > salesToPeriod) return false;
+                }
+                return true;
+            });
+
+            updateKPIs(); renderCharts(); renderTablesAndLists();
+        }
+
+        function clearFilters() {
+            selectBranches(true); selectWarehouses('saldos', true); selectWarehouses('vendas', true); selectTES(true);
+            setPeriod('custom'); clearGlobalProduct();
+        }
+
+        function updateKPIs() {
+            const fat = filteredVendas.reduce((s, v) => s + v['Vlr.Total'], 0);
+            const docs = new Set(filteredVendas.map(v => v['Num. Docto.'])).size;
+            
+            let vPC=0, vKG=0, ePC=0, eKG=0;
+            filteredVendas.forEach(v => v.Unidade === 'KG' ? vKG += v.Quantidade : vPC += v.Quantidade);
+            filteredSaldos.forEach(s => s.Unidade === 'KG' ? eKG += s['Qtde.1a.U.M.'] : ePC += s['Qtde.1a.U.M.']);
+
+            document.getElementById("kpi-faturamento").innerText = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(fat);
+            document.getElementById("kpi-ticket").innerText = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(docs > 0 ? fat/docs : 0);
+            document.getElementById("kpi-qtd-vendas-pc").innerText = `${vPC.toLocaleString('pt-BR')} PC`;
+            document.getElementById("kpi-qtd-vendas-kg").innerText = `${vKG.toLocaleString('pt-BR',{minimumFractionDigits:2})} KG`;
+            document.getElementById("kpi-estoque-pc").innerText = `${ePC.toLocaleString('pt-BR')} PC`;
+            document.getElementById("kpi-estoque-kg").innerText = `${eKG.toLocaleString('pt-BR',{minimumFractionDigits:2})} KG`;
+        }
+
+        function sanitizeQuantityInput() { const el = document.getElementById("sim-qty"); if(el) { el.value = parseFloat(el.value)||0; recalculateSimulation(); } }
+        function sanitizeQuantityInputOnInput() { const el = document.getElementById("sim-qty"); if(el && el.value.length>1 && el.value.startsWith('0')) el.value = el.value.replace(/^0+/,''); recalculateSimulation(); }
+
+        function recalculateSimulation() {
+            const qtyInput = document.getElementById("sim-qty");
+            const targetSelect = document.getElementById("sim-target-branch");
+            if(!qtyInput || !targetSelect) return;
+
+            const qty = parseFloat(qtyInput.value)||0;
+            const target = parseInt(targetSelect.value);
+
+            if (!globalSelectedProductCode) {
+                document.getElementById("sim-product-desc").innerHTML = `<span class="text-amber-600 font-bold"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>BUSQUE UM MATERIAL PARA INICIAR</span>`;
+                document.getElementById("sim-tbody").innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Use a barra de pesquisa global.</td></tr>`;
+                document.getElementById("sim-fatiada-tbody").innerHTML = ""; document.getElementById("sim-total-saldo-pos").innerText = "0 PC";
+                document.getElementById("sim-alert-box").classList.add("hidden");
+                return;
+            }
+
+            const dic = rawDicionario.find(d => d.Produto === globalSelectedProductCode);
+            document.getElementById("sim-product-desc").innerText = dic ? dic.Descricao : `Material ${globalSelectedProductCode}`;
+            const unit = dic ? dic.Unidade : 'PC';
+
+            const keys = getPeriodKeys();
+            let analysisKeys = keys.slice(-6).reverse();
+            MONTHS_ANALYSIS = analysisKeys.map(k => { const [y,m] = k.split('-'); return {key: k, label: `${MONTH_NAMES[m]}/${y.substring(2)}`}; });
+
+            const prodSaldos = rawSaldos.filter(s => s.Produto === globalSelectedProductCode && selectedSaldosWarehouses.includes(s.Armazem));
+            const prodVendas = rawVendas.filter(v => v.Produto === globalSelectedProductCode && selectedVendasWarehouses.includes(v.Armazem) && selectedTES.includes(v.TipoSaida));
+
+            const salesMap = {};
+            prodVendas.forEach(v => {
+                const ym = v.Emissao.substring(0,7);
+                if(analysisKeys.includes(ym)) {
+                    if(!salesMap[v.Filial]) salesMap[v.Filial] = {};
+                    if(!salesMap[v.Filial][ym]) salesMap[v.Filial][ym] = {qty:0, val:0};
+                    salesMap[v.Filial][ym].qty += v.Quantidade; salesMap[v.Filial][ym].val += v['Vlr.Total'];
+                }
+            });
+
+            const rows = [], alerts = [];
+            let targetPos = 0;
+
+            Object.keys(DIC_FILIAIS).forEach(fId => {
+                const fid = parseInt(fId);
+                const saldo = prodSaldos.filter(s=>s.Filial===fid).reduce((a,c)=>a+c['Qtde.1a.U.M.'],0);
+                
+                let vQtd=0, vVal=0;
+                analysisKeys.forEach(m => { if(salesMap[fid] && salesMap[fid][m]) { vQtd += salesMap[fid][m].qty; vVal += salesMap[fid][m].val; } });
+                
+                const mQtd = analysisKeys.length ? vQtd/analysisKeys.length : 0;
+                const mFat = analysisKeys.length ? vVal/analysisKeys.length : 0;
+                let sPos = fid === target ? saldo + qty : saldo - qty;
+                if(fid === target) targetPos = sPos;
+
+                let cob = mQtd > 0 ? sPos/mQtd : (sPos>0 ? 99 : 0);
+                let st = cob < 3 ? "CRÍTICO" : cob > 6 ? "EXCESSO" : "IDEAL";
+                let scls = st === "CRÍTICO" ? "bg-red-50 text-red-600 border-red-200" : st === "EXCESSO" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+                rows.push(`
+                    <tr class="${fid===target?'bg-slate-50 font-bold border-l-4 border-amazonBlue-500':'hover:bg-slate-50'} text-xs">
+                        <td class="py-3 px-4 flex items-center gap-2">${DIC_FILIAIS[fid]} ${fid===target?'<span class="text-[9px] bg-amazonBlue-600 text-white px-1 py-0.5 rounded">Destino</span>':''}</td>
+                        <td class="py-3 px-3 text-center">-</td>
+                        <td class="py-3 px-3 text-center"><span class="px-2 py-0.5 rounded font-bold text-[10px] border ${scls}">${st}</span></td>
+                        <td class="py-3 px-3 text-center font-black ${cob<3?'text-red-500':''}">${cob===99?'Sem Venda':cob.toFixed(1)}</td>
+                        <td class="py-3 px-3 text-right">${saldo.toLocaleString('pt-BR')}</td>
+                        <td class="py-3 px-3 text-right font-bold ${fid===target?'text-amazonBlue-600 bg-slate-100':''}">${sPos.toLocaleString('pt-BR')}</td>
+                        <td class="py-3 px-3 text-right">${vQtd.toLocaleString('pt-BR')}</td>
+                        <td class="py-3 px-3 text-right">${mQtd.toFixed(1)}</td>
+                        <td class="py-3 px-3 text-right">${new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(mFat)}</td>
+                        <td class="py-3 px-4 text-right font-bold ${saldo-vQtd<0?'text-red-500':'text-emerald-600'}">${(saldo-vQtd).toLocaleString('pt-BR')}</td>
+                    </tr>
+                `);
+
+                if (qty > 0 && fid !== target) {
+                    if (sPos < 0) alerts.push(`<div class="p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">🛑 <b>${DIC_FILIAIS[fid]}</b> ficará com estoque NEGATIVO (${sPos})!</div>`);
+                    else if (sPos === 0) alerts.push(`<div class="p-2 bg-amber-50 border border-amber-300 rounded text-amber-800 text-xs">⚠️ <b>${DIC_FILIAIS[fid]}</b> esgotará seu estoque!</div>`);
+                }
+            });
+
+            document.getElementById("sim-tbody").innerHTML = rows.join('');
+            document.getElementById("sim-total-saldo-pos").innerText = `${targetPos.toLocaleString('pt-BR')} ${unit}`;
+            
+            const alertCont = document.getElementById("sim-alerts-container");
+            if (alerts.length > 0) { alertCont.innerHTML = alerts.join(''); document.getElementById("sim-alert-box").classList.remove("hidden"); }
+            else document.getElementById("sim-alert-box").classList.add("hidden");
+
+            const theadFatiada = document.getElementById("sim-fatiada-thead");
+            const tbodyFatiada = document.getElementById("sim-fatiada-tbody");
+            if(theadFatiada && tbodyFatiada) {
+                theadFatiada.innerHTML = `<th class="py-3 px-4">Filiais</th>` + MONTHS_ANALYSIS.map(m=>`<th class="py-3 px-3 text-right">${m.label}</th>`).join('');
+                tbodyFatiada.innerHTML = Object.keys(DIC_FILIAIS).map(fid => {
+                    let html = `<td class="py-3 px-4 font-bold">${DIC_FILIAIS[fid]}</td>`;
+                    MONTHS_ANALYSIS.forEach(m => html += `<td class="py-3 px-3 text-right">${salesMap[fid]&&salesMap[fid][m.key]?salesMap[fid][m.key].qty:0}</td>`);
+                    return `<tr class="${fid==target?'bg-slate-50 font-semibold':'hover:bg-slate-50 text-xs'}">${html}</tr>`;
+                }).join('');
+            }
+        }
+
+        function renderCharts() {
+            if(!filteredVendas.length) return;
+            const dates = Array.from(new Set(filteredVendas.map(v => isSingleMonthView ? v.Emissao : v.Emissao.substring(0,7)))).sort();
+            const seriesTrend = activeBranches.map(fid => {
+                const data = dates.map(d => {
+                    return filteredVendas.filter(v => v.Filial === fid && v.Emissao.startsWith(d)).reduce((s,v)=>s+v['Vlr.Total'],0);
+                });
+                return { name: getFilialName(fid), data: data.map(v=>parseFloat(v.toFixed(2))) };
+            });
+
+            const optTrend = {
+                series: seriesTrend, chart: { type: 'line', height: 320, toolbar:{show:false} },
+                stroke: { curve: 'smooth', width: 3 }, xaxis: { categories: dates },
+                yaxis: { labels: { formatter: v => "R$ " + v.toLocaleString('pt-BR',{maximumFractionDigits:0}) } }
+            };
+            if(chartSalesTrend) chartSalesTrend.destroy();
+            const elTrend = document.querySelector("#sales-trend-chart");
+            if(elTrend) { chartSalesTrend = new ApexCharts(elTrend, optTrend); chartSalesTrend.render(); }
+
+            const branchSales = {}; filteredVendas.forEach(v => branchSales[getFilialName(v.Filial)] = (branchSales[getFilialName(v.Filial)]||0) + v['Vlr.Total']);
+            const optBranch = {
+                series: [{ name: 'Fat', data: Object.values(branchSales).map(v=>parseFloat(v.toFixed(2))) }],
+                chart: { type: 'bar', height: 320, toolbar:{show:false} },
+                plotOptions: { bar: { horizontal: true, distributed: true, borderRadius: 4 } },
+                xaxis: { categories: Object.keys(branchSales) }, legend: {show:false}
+            };
+            if(chartSalesBranch) chartSalesBranch.destroy();
+            const elBranch = document.querySelector("#sales-branch-chart");
+            if(elBranch) { chartSalesBranch = new ApexCharts(elBranch, optBranch); chartSalesBranch.render(); }
+
+            if(!filteredSaldos.length) return;
+            const branchStock = {}; filteredSaldos.forEach(s => branchStock[getFilialName(s.Filial)] = (branchStock[getFilialName(s.Filial)]||0) + s['Qtde.1a.U.M.']);
+            const optStock = {
+                series: Object.values(branchStock), labels: Object.keys(branchStock),
+                chart: { type: 'donut', height: 320 }, plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Total' } } } } }
+            };
+            if(chartStockDistribution) chartStockDistribution.destroy();
+            const elStock = document.querySelector("#stock-distribution-chart");
+            if(elStock) { chartStockDistribution = new ApexCharts(elStock, optStock); chartStockDistribution.render(); }
+        }
+
+        function renderTablesAndLists() {
+            const top = {};
+            filteredVendas.forEach(v => { if(!top[v.Produto]) top[v.Produto]={q:0,v:0}; top[v.Produto].q+=v.Quantidade; top[v.Produto].v+=v['Vlr.Total']; });
+            const topArr = Object.keys(top).map(k => ({id:k, ...top[k]})).sort((a,b)=>b.v-a.v).slice(0,10);
+            
+            const tbTop = document.getElementById("top-products-tbody");
+            if(tbTop) {
+                tbTop.innerHTML = topArr.map((p,i) => `
+                    <tr class="hover:bg-slate-50 text-xs border-b border-slate-100">
+                        <td class="py-2 px-4 font-bold flex gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center">${i+1}</span>${p.id}</td>
+                        <td class="py-2 px-4">${p.q.toLocaleString()}</td><td class="py-2 px-4 text-emerald-600 font-bold">R$ ${p.v.toLocaleString('pt-BR')}</td>
+                        <td class="py-2 px-4"><button onclick="selectGlobalProduct('${p.id}')" class="text-amazonBlue-600 hover:underline">Inspecionar</button></td>
+                    </tr>`).join('');
+            }
+
+            const tbSearch = document.getElementById("search-results-tbody");
+            if(tbSearch) {
+                tbSearch.innerHTML = filteredSaldos.slice(0,50).map(s => {
+                    const dic = rawDicionario.find(d=>d.Produto===s.Produto);
+                    return `<tr class="hover:bg-slate-50 text-xs border-b border-slate-100">
+                        <td class="py-2 px-4 font-bold">${s.Produto}</td><td class="py-2 px-4 truncate max-w-[200px]">${dic?dic.Descricao:s.Descricao}</td>
+                        <td class="py-2 px-4">${getFilialName(s.Filial)}</td><td class="py-2 px-4">Arm ${s.Armazem}</td><td class="py-2 px-4 text-right font-bold">${s['Qtde.1a.U.M.']}</td>
+                    </tr>`;
+                }).join('');
+            }
+            
+            const skusEl = document.getElementById("summary-unique-skus");
+            if(skusEl) skusEl.innerText = new Set(filteredSaldos.map(s=>s.Produto)).size;
+            
+            const whEl = document.getElementById("summary-active-warehouses");
+            if(whEl) whEl.innerText = new Set(filteredSaldos.map(s=>s.Armazem)).size;
+        }
+
+        function switchTab(t) {
+            ['remanejamento', 'vendas', 'estoque', 'analitico'].forEach(x => {
+                const tabEl = document.getElementById(`tab-${x}`);
+                const btnEl = document.getElementById(`tab-btn-${x}`);
+                if(tabEl) tabEl.classList.add("hidden");
+                if(btnEl) btnEl.className = "flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg text-slate-500 hover:bg-slate-50";
+            });
+            const activeTab = document.getElementById(`tab-${t}`);
+            const activeBtn = document.getElementById(`tab-btn-${t}`);
+            if(activeTab) activeTab.classList.remove("hidden");
+            if(activeBtn) activeBtn.className = "flex-1 min-w-max px-4 py-2.5 text-xs font-bold rounded-lg bg-amazonBlue-600 text-white shadow-sm";
+        }
+    </script>
+</body>
+</html>
