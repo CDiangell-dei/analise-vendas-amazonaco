@@ -249,7 +249,7 @@
                             <i class="fa-solid fa-xmark text-sm"></i>
                         </button>
                     </div>
-                    <div id="global-autocomplete-list" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 font-medium"></div>
+                    <div id="global-autocomplete-list" class="hidden absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-[400px] overflow-y-auto divide-y divide-slate-100 font-medium"></div>
                 </div>
 
                 <div class="w-full lg:w-auto">
@@ -671,9 +671,11 @@
         function normalizeProductCode(code) {
             if (code === undefined || code === null) return '';
             let cleanStr = String(code).trim();
-            // Remove leading zeros only if the string is purely numeric
+            // Se for puramente numérico, garante que tenha 8 dígitos com zeros à esquerda
             if (/^\d+$/.test(cleanStr)) {
-               return cleanStr.replace(/^0+/, '');
+               let numStr = cleanStr.replace(/^0+/, ''); // remove zeros soltos
+               if (numStr === '') return '0';
+               return numStr.padStart(8, '0'); // padroniza para 8 posições
             }
             return cleanStr;
         }
@@ -1161,8 +1163,8 @@
                 return;
             }
 
-            // Build UI for specific code matches
-            specificCodeMatches.slice(0, 5).forEach(m => {
+            // Build UI for specific code matches (removido o limite de exibição)
+            specificCodeMatches.forEach(m => {
                 const div = document.createElement("div");
                 div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer transition flex items-center justify-between";
                 div.innerHTML = `
@@ -1179,8 +1181,8 @@
                 listEl.appendChild(div);
             });
 
-            // Build UI for Grouped Consolidations
-            Object.keys(groupedResults).slice(0, 5).forEach(normDesc => {
+            // Build UI for Grouped Consolidations (removido o limite de exibição)
+            Object.keys(groupedResults).forEach(normDesc => {
                 const productsInGroup = groupedResults[normDesc];
                 const codesPreview = productsInGroup.map(p => p.code).join(', ');
                 
