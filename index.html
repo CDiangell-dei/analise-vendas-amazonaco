@@ -532,6 +532,7 @@
 
         let globalSelectedProductCode = "";
         let globalSelectedProductNormalizedDesc = ""; // Store normalized desc for grouping
+        let globalSelectedSearchTerm = ""; // NOVO: Armazena a busca ampla
 
         let salesFromPeriod = "";
         let salesToPeriod = "";
@@ -711,6 +712,9 @@
             
             // Remove (IMP) at the end or anywhere
             norm = norm.replace(/\(IMP\)/g, '');
+            
+            // Remove indicações de caixa com quantidades (ex: CX 24, CX 25, CX100)
+            norm = norm.replace(/\bCX\s*\d+\b/g, '');
             
             // Remove numbers in parenthesis at the end e.g. (13.35) or (17,1)
             // It looks for a space, then (, then digits, dots, commas, then ) at the end of string
@@ -1191,48 +1195,61 @@
             const searchVal = value.toLowerCase().trim();
             const normalizedSearchVal = normalizeProductCode(value).toLowerCase().trim();
             
-            // Map to store grouped results: key is NormalizedDesc, value is array of objects {code, desc}
+            // Map to store grouped results
             const groupedResults = {};
-            // Array for exact specific code matches
             const specificCodeMatches = [];
+            const aggregatedCodes = new Set(); // Para a Super Consolidação
+
+            const checkMatch = (code, desc, norm) => {
+                const isCodeMatch = String(code).toLowerCase().includes(searchVal) || normalizeProductCode(code).toLowerCase().includes(normalizedSearchVal);
+                const isDescMatch = String(desc).toLowerCase().includes(searchVal) || String(norm).toLowerCase().includes(searchVal);
+                
+                if (isCodeMatch || isDescMatch) aggregatedCodes.add(code);
+
+                if (isCodeMatch) {
+                    if (!specificCodeMatches.find(x => x.code === code)) {
+                        specificCodeMatches.push({code: code, desc: desc, norm: norm});
+                    }
+                } else if (isDescMatch) {
+                    if (!groupedResults[norm]) groupedResults[norm] = [];
+                    if (!groupedResults[norm].find(x => x.code === code)) {
+                        groupedResults[norm].push({code: code, desc: desc});
+                    }
+                }
+            };
 
             // 1. Search in Dictionary
-            rawDicionario.forEach(d => {
-                const isCodeMatch = d.Produto.toLowerCase().includes(searchVal) || normalizeProductCode(d.Produto).toLowerCase().includes(normalizedSearchVal);
-                const isDescMatch = d.Descricao.toLowerCase().includes(searchVal) || d.NormalizedDesc.toLowerCase().includes(searchVal);
-                
-                if (isCodeMatch) {
-                    specificCodeMatches.push({code: d.Produto, desc: d.Descricao, norm: d.NormalizedDesc});
-                } else if (isDescMatch) {
-                    if (!groupedResults[d.NormalizedDesc]) groupedResults[d.NormalizedDesc] = [];
-                    // Only add if code is not already in this group
-                    if (!groupedResults[d.NormalizedDesc].find(x => x.code === d.Produto)) {
-                        groupedResults[d.NormalizedDesc].push({code: d.Produto, desc: d.Descricao});
-                    }
-                }
-            });
+            rawDicionario.forEach(d => checkMatch(d.Produto, d.Descricao, d.NormalizedDesc));
 
             // 2. Search in Saldos (if not in dict)
-            rawSaldos.forEach(s => {
-                const isCodeMatch = s.Produto.toLowerCase().includes(searchVal) || normalizeProductCode(s.Produto).toLowerCase().includes(normalizedSearchVal);
-                const isDescMatch = s.Descricao.toLowerCase().includes(searchVal) || s.NormalizedDesc.toLowerCase().includes(searchVal);
-                
-                if (isCodeMatch && !specificCodeMatches.find(x => x.code === s.Produto)) {
-                    specificCodeMatches.push({code: s.Produto, desc: s.Descricao, norm: s.NormalizedDesc});
-                } else if (isDescMatch) {
-                    if (!groupedResults[s.NormalizedDesc]) groupedResults[s.NormalizedDesc] = [];
-                    if (!groupedResults[s.NormalizedDesc].find(x => x.code === s.Produto)) {
-                        groupedResults[s.NormalizedDesc].push({code: s.Produto, desc: s.Descricao});
-                    }
-                }
-            });
+            rawSaldos.forEach(s => checkMatch(s.Produto, s.Descricao, s.NormalizedDesc));
 
-            if (specificCodeMatches.length === 0 && Object.keys(groupedResults).length === 0) {
+            if (specificCodeMatches.length === 0 && Object.keys(groupedResults).length === 0 && aggregatedCodes.size === 0) {
                 listEl.classList.add("hidden");
                 return;
             }
 
-            // Build UI for specific code matches (removido o limite de exibição)
+            // --- NOVO: OPÇÃO DE SUPER CONSOLIDAÇÃO (Aparece no topo) ---
+            if (aggregatedCodes.size > 1 && searchVal.length >= 3) {
+                const div = document.createElement("div");
+                div.className = "p-3 hover:bg-emerald-50 bg-emerald-50/30 text-xs text-slate-700 cursor-pointer transition border-b-2 border-emerald-500 flex flex-col";
+                div.innerHTML = `
+                    <div class="font-bold text-emerald-800 flex items-center gap-2">
+                        <span class="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[9px] uppercase font-black tracking-wider"><i class="fa-solid fa-object-group mr-1"></i>Super Consolidação</span>
+                        Tudo contendo "${value}"
+                    </div>
+                    <div class="text-[10px] text-emerald-700 mt-1 truncate font-semibold">
+                        Somará saldos e vendas de ${aggregatedCodes.size} códigos diferentes baseados nesse texto.
+                    </div>
+                `;
+                div.onclick = function() {
+                    selectGlobalProduct(null, null, searchVal);
+                    listEl.classList.add("hidden");
+                };
+                listEl.appendChild(div);
+            }
+
+            // Build UI for specific code matches
             specificCodeMatches.forEach(m => {
                 const div = document.createElement("div");
                 div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer transition flex items-center justify-between";
@@ -1244,7 +1261,7 @@
                     </div>
                 `;
                 div.onclick = function() {
-                    selectGlobalProduct(m.code, null);
+                    selectGlobalProduct(null, normDesc, null);
                     listEl.classList.add("hidden");
                 };
                 listEl.appendChild(div);
@@ -1276,30 +1293,19 @@
             listEl.classList.remove("hidden");
         }
 
-        function handleGlobalProductKeyDown(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                const listEl = document.getElementById("global-autocomplete-list");
-                const firstOption = listEl.querySelector("div");
-                if (firstOption) {
-                    firstOption.click();
-                } else {
-                    const typedVal = event.target.value.trim();
-                    if (typedVal) selectGlobalProduct(typedVal, null); // Fallback to specific search
-                }
-                listEl.classList.add("hidden");
-            }
-        }
-
-        // Modified select to handle either a specific code OR a normalized description
-        function selectGlobalProduct(code, normalizedDesc) {
+        // Modified select to handle specific code, normalized description, OR super search term
+        function selectGlobalProduct(code, normalizedDesc, searchTerm = null) {
             const inputEl = document.getElementById("global-product-code");
             const badgeEl = document.getElementById("global-um-badge");
             const bannerTypeEl = document.getElementById("banner-active-type");
             
+            // Reset all
+            globalSelectedProductCode = "";
+            globalSelectedProductNormalizedDesc = "";
+            globalSelectedSearchTerm = "";
+
             if (code) {
                 globalSelectedProductCode = normalizeProductCode(code);
-                globalSelectedProductNormalizedDesc = "";
                 inputEl.value = globalSelectedProductCode;
                 bannerTypeEl.innerText = "Material Específico Ativo";
                 bannerTypeEl.className = "text-[10px] text-amazonRed-600 uppercase font-black tracking-wider";
@@ -1308,7 +1314,6 @@
                 badgeEl.innerText = `UM: ${unit}`;
                 document.getElementById("sim-product-desc").innerText = getProductDescription(globalSelectedProductCode);
             } else if (normalizedDesc) {
-                globalSelectedProductCode = "";
                 globalSelectedProductNormalizedDesc = normalizedDesc;
                 inputEl.value = normalizedDesc;
                 bannerTypeEl.innerText = "Grupo Consolidado Ativo";
@@ -1316,6 +1321,14 @@
                 
                 badgeEl.innerText = `GRUPO`;
                 document.getElementById("sim-product-desc").innerText = normalizedDesc;
+            } else if (searchTerm) {
+                globalSelectedSearchTerm = searchTerm;
+                inputEl.value = searchTerm;
+                bannerTypeEl.innerHTML = `<i class="fa-solid fa-object-group mr-1"></i> Super Consolidação Ativa`;
+                bannerTypeEl.className = "text-[10px] text-emerald-600 uppercase font-black tracking-wider";
+                
+                badgeEl.innerText = `MÚLTIPLOS`;
+                document.getElementById("sim-product-desc").innerText = `Analisando todos os materiais que contêm: "${searchTerm}"`;
             }
 
             document.getElementById("btn-clear-global-product").classList.remove("hidden");
@@ -1326,6 +1339,7 @@
         function clearGlobalProduct() {
             globalSelectedProductCode = "";
             globalSelectedProductNormalizedDesc = "";
+            globalSelectedSearchTerm = ""; // NOVO
             document.getElementById("global-product-code").value = "";
             document.getElementById("global-um-badge").innerText = "Todos";
             document.getElementById("banner-active-type").innerText = "Material Ativo para Análise";
@@ -1504,6 +1518,10 @@
                     matchGlobalProduct = item.Produto === globalSelectedProductCode;
                 } else if (globalSelectedProductNormalizedDesc) {
                     matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
+                } else if (globalSelectedSearchTerm) {
+                    matchGlobalProduct = String(item.Descricao).toLowerCase().includes(globalSelectedSearchTerm) || 
+                                         String(item.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || 
+                                         String(item.Produto).toLowerCase().includes(globalSelectedSearchTerm);
                 }
 
                 return matchBranch && matchWarehouse && matchGlobalProduct;
@@ -1519,6 +1537,9 @@
                     matchGlobalProduct = item.Produto === globalSelectedProductCode;
                 } else if (globalSelectedProductNormalizedDesc) {
                     matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
+                } else if (globalSelectedSearchTerm) {
+                    matchGlobalProduct = String(item.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || 
+                                         String(item.Produto).toLowerCase().includes(globalSelectedSearchTerm);
                 }
 
                 let matchPeriod = true;
@@ -1599,8 +1620,8 @@
             // Salva a unidade de simulação escolhida no navegador
             localStorage.setItem('portal_target_branch', targetBranch);
 
-            if (!globalSelectedProductCode && !globalSelectedProductNormalizedDesc) {
-                document.getElementById("sim-tbody").innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Selecione um código de produto na busca superior para iniciar a análise.</td></tr>`;
+            if (!globalSelectedProductCode && !globalSelectedProductNormalizedDesc && !globalSelectedSearchTerm) {
+                document.getElementById("sim-tbody").innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Selecione um código ou grupo na busca superior para iniciar a análise.</td></tr>`;
                 document.getElementById("sim-fatiada-tbody").innerHTML = "";
                 document.getElementById("sim-total-saldo-pos").innerText = "0";
                 document.getElementById("sim-alert-box").classList.add("hidden");
@@ -1623,6 +1644,9 @@
             } else if (globalSelectedProductNormalizedDesc) {
                 productSaldos = rawSaldos.filter(s => s.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
                 productVendas = rawVendas.filter(v => v.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
+            } else if (globalSelectedSearchTerm) {
+                productSaldos = rawSaldos.filter(s => (String(s.Descricao).toLowerCase().includes(globalSelectedSearchTerm) || String(s.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || String(s.Produto).toLowerCase().includes(globalSelectedSearchTerm)) && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
+                productVendas = rawVendas.filter(v => (String(v.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || String(v.Produto).toLowerCase().includes(globalSelectedSearchTerm)) && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
             }
 
             const analysisMonthsKeys = MONTHS_ANALYSIS.map(m => m.key);
@@ -1642,8 +1666,12 @@
             rawVendas.forEach(v => {
                 if (selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES))) {
                     if (!branchProductQuantity[v.Filial]) branchProductQuantity[v.Filial] = {};
-                    // Group by NormalizedDesc for ABC curve if in consolidated mode, else group by specific code
-                    let trackingKey = globalSelectedProductNormalizedDesc ? v.NormalizedDesc : v.Produto;
+                    
+                    // Group by appropriate key for ABC curve
+                    let trackingKey = v.Produto;
+                    if (globalSelectedProductNormalizedDesc) trackingKey = v.NormalizedDesc;
+                    if (globalSelectedSearchTerm) trackingKey = "SUPER_GROUP"; // Treat all matches as ONE product for ABC
+
                     branchProductQuantity[v.Filial][trackingKey] = (branchProductQuantity[v.Filial][trackingKey] || 0) + v.Quantidade;
                 }
             });
@@ -1668,7 +1696,9 @@
                         const prevCumulativePct = (cumulativeQuantity / totalFilialQuantity) * 100;
                         cumulativeQuantity += prodQty;
                         
-                        let targetKey = globalSelectedProductNormalizedDesc ? globalSelectedProductNormalizedDesc : globalSelectedProductCode;
+                        let targetKey = globalSelectedProductCode;
+                        if (globalSelectedProductNormalizedDesc) targetKey = globalSelectedProductNormalizedDesc;
+                        if (globalSelectedSearchTerm) targetKey = "SUPER_GROUP";
                         
                         if (sortedProds[i].key === targetKey) {
                             if (prevCumulativePct < 80) curveABC = "A";
