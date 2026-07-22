@@ -542,15 +542,39 @@
         let chartStockDistribution = null;
         let isSingleMonthView = false;
 
-        const MONTHS_ANALYSIS = [
-            { key: "2026-07", label: "JULHO", label_full: "Julho/26" },
-            { key: "2026-06", label: "JUNHO", label_full: "Junho/26" },
-            { key: "2026-05", label: "MAIO", label_full: "Maio/26" },
-            { key: "2026-04", label: "ABRIL", label_full: "Abril/26" },
-            { key: "2026-03", label: "MARÇO", label_full: "Março/26" },
-            { key: "2026-02", label: "FEVEREIRO", label_full: "Fevereiro/26" },
-            { key: "2026-01", label: "JANEIRO", label_full: "Janeiro/26" }
-        ];
+        let MONTHS_ANALYSIS = [];
+
+        function buildDynamicMonths() {
+            let maxDateStr = "";
+            rawVendas.forEach(v => {
+                if (v.Emissao && v.Emissao !== 'Data N/D') {
+                    if (v.Emissao > maxDateStr) maxDateStr = v.Emissao;
+                }
+            });
+
+            let baseDate = new Date(); // Fallback para a data de hoje
+            if (maxDateStr) {
+                const parts = maxDateStr.split('-');
+                // Usamos o dia 15 para evitar que fusos horários mudem o mês acidentalmente
+                baseDate = new Date(parts[0], parts[1] - 1, 15);
+            }
+
+            MONTHS_ANALYSIS = [];
+            // Mês atual da planilha + 6 meses para trás = 7 colunas no total
+            for (let i = 0; i < 7; i++) {
+                let d = new Date(baseDate);
+                d.setMonth(d.getMonth() - i);
+                const yr = d.getFullYear();
+                const mo = String(d.getMonth() + 1).padStart(2, '0');
+                const moName = MONTH_NAMES[mo] ? MONTH_NAMES[mo].toUpperCase() : mo;
+
+                MONTHS_ANALYSIS.push({
+                    key: `${yr}-${mo}`,
+                    label: moName,
+                    label_full: `${MONTH_NAMES[mo] || mo}/${String(yr).substring(2)}`
+                });
+            }
+        }
 
         window.onload = function() {
             loadConfigPaths();
@@ -1416,6 +1440,7 @@
         }
 
         function processAndPopulate() {
+            buildDynamicMonths();
             buildBranchFilters();
             populateSalesPeriods();
             applyFilters();
@@ -1617,8 +1642,9 @@
                     }
                 });
 
-                const mediaMesQtd = parseFloat((totalQtdVendas / 7).toFixed(1));
-                const mediaMesFat = parseFloat((totalValVendas / 7).toFixed(2));
+                const numMeses = MONTHS_ANALYSIS.length || 1;
+                const mediaMesQtd = parseFloat((totalQtdVendas / numMeses).toFixed(1));
+                const mediaMesFat = parseFloat((totalValVendas / numMeses).toFixed(2));
                 const dif = saldoAtual - totalQtdVendas;
 
                 let saldoPosEnvio = saldoAtual;
