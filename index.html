@@ -42,6 +42,7 @@
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col selection:bg-amazonRed-200 selection:text-amazonRed-700">
 
+    <!-- STREAMING_CHUNK:Rendering header layout... -->
     <header class="border-b border-slate-200 bg-white sticky top-0 z-50 px-6 py-3.5 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
         <div class="flex items-center gap-4">
             <div class="p-1 flex items-center justify-center">
@@ -66,6 +67,7 @@
         </div>
     </header>
 
+    <!-- STREAMING_CHUNK:Rendering configuration settings section... -->
     <section class="bg-white border-b border-slate-200 p-5 shadow-sm">
         <div class="max-w-7xl mx-auto space-y-3">
             <div class="text-xs text-slate-500 font-semibold mb-2">
@@ -125,6 +127,7 @@
         </div>
     </section>
 
+    <!-- STREAMING_CHUNK:Rendering main banner summary... -->
     <div class="max-w-7xl w-full mx-auto px-6 pt-6">
         <div class="bg-gradient-to-r from-amazonBlue-600 to-amazonBlue-700 text-white rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div class="space-y-1">
@@ -150,6 +153,7 @@
         </div>
     </div>
 
+    <!-- STREAMING_CHUNK:Rendering filter bar... -->
     <div class="max-w-7xl w-full mx-auto px-6 pt-6 space-y-6">
         
         <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -264,20 +268,31 @@
             <i class="fa-solid fa-info-circle mr-1.5"></i> <span id="toast-message">Notificação</span>
         </div>
 
-        <!-- Banner Global do Material Selecionado -->
+        <!-- Banner Global do Material Selecionado (Com lista interativa de exclusão) -->
         <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="p-2.5 bg-amazonBlue-50 text-amazonBlue-600 rounded-xl border border-amazonBlue-100 shadow-sm">
-                        <i class="fa-solid fa-layer-group text-xl"></i>
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-3">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-amazonBlue-50 text-amazonBlue-600 rounded-xl border border-amazonBlue-100 shadow-sm">
+                            <i class="fa-solid fa-layer-group text-xl"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-amazonRed-600 uppercase font-black tracking-wider" id="banner-active-type">Material Ativo para Análise</span>
+                            <h3 id="sim-product-desc" class="text-sm font-bold text-slate-800 mt-0.5">Nenhum material selecionado. Use o filtro superior para iniciar.</h3>
+                        </div>
                     </div>
-                    <div>
-                        <span class="text-[10px] text-amazonRed-600 uppercase font-black tracking-wider" id="banner-active-type">Material Ativo para Análise</span>
-                        <h3 id="sim-product-desc" class="text-sm font-bold text-slate-800 mt-0.5">Nenhum material selecionado. Use o filtro superior para iniciar.</h3>
+                    <div class="text-[11px] text-slate-500 font-semibold italic text-left md:text-right">
+                        * Consolida saldos e vendas de variações quando a busca base é selecionada.
                     </div>
                 </div>
-                <div class="text-[11px] text-slate-500 font-semibold italic text-left md:text-right">
-                    * Consolida saldos e vendas de variações quando a busca base é selecionada.
+
+                <!-- Lista interativa de códigos agrupados (aparece apenas quando há múltiplos códigos consolidados) -->
+                <div id="banner-subcodes-container" class="hidden pt-3 border-t border-slate-200 space-y-2">
+                    <div class="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                        <span><i class="fa-solid fa-list-check text-amazonBlue-500 mr-1"></i> Códigos Incluídos nesta Consolidação (Desmarque para excluir da análise):</span>
+                        <span id="banner-subcodes-count" class="text-[10px] text-amazonBlue-600 bg-amazonBlue-50 px-2 py-0.5 rounded font-extrabold border border-amazonBlue-200">0 itens</span>
+                    </div>
+                    <div id="banner-subcodes-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-36 overflow-y-auto p-1 bg-white rounded-xl border border-slate-200"></div>
                 </div>
             </div>
         </div>
@@ -493,6 +508,7 @@
 
     </div>
 
+    <!-- STREAMING_CHUNK:Rendering footer... -->
     <footer class="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 mt-auto shadow-inner">
         Desenvolvido para análise inteligente de filiais conectado ao Google Sheets.<br>
         <strong class="text-amazonRed-600 font-bold">Uso Interno — Amazon Aço Indústria e Comércio Ltda.</strong>
@@ -531,8 +547,9 @@
         let selectedTES = [];
 
         let globalSelectedProductCode = "";
-        let globalSelectedProductNormalizedDesc = ""; // Store normalized desc for grouping
-        let globalSelectedSearchTerm = ""; // NOVO: Armazena a busca ampla
+        let globalSelectedProductNormalizedDesc = ""; 
+        let globalSelectedSearchTerm = ""; 
+        let excludedSubCodes = new Set(); // Códigos desmarcados pelo usuário na super consolidação
 
         let salesFromPeriod = "";
         let salesToPeriod = "";
@@ -553,15 +570,13 @@
                 }
             });
 
-            let baseDate = new Date(); // Fallback para a data de hoje
+            let baseDate = new Date(); 
             if (maxDateStr) {
                 const parts = maxDateStr.split('-');
-                // Usamos o dia 15 para evitar que fusos horários mudem o mês acidentalmente
                 baseDate = new Date(parts[0], parts[1] - 1, 15);
             }
 
             MONTHS_ANALYSIS = [];
-            // Mês atual da planilha + 6 meses para trás = 7 colunas no total
             for (let i = 0; i < 7; i++) {
                 let d = new Date(baseDate);
                 d.setMonth(d.getMonth() - i);
@@ -696,31 +711,20 @@
         function normalizeProductCode(code) {
             if (code === undefined || code === null) return '';
             let cleanStr = String(code).trim();
-            // Se for puramente numérico, garante que tenha 8 dígitos com zeros à esquerda
             if (/^\d+$/.test(cleanStr)) {
-               let numStr = cleanStr.replace(/^0+/, ''); // remove zeros soltos
+               let numStr = cleanStr.replace(/^0+/, ''); 
                if (numStr === '') return '0';
-               return numStr.padStart(8, '0'); // padroniza para 8 posições
+               return numStr.padStart(8, '0'); 
             }
             return cleanStr;
         }
 
-        // New function to normalize descriptions for grouping
         function normalizeDescription(desc) {
             if (!desc) return '';
             let norm = desc.toUpperCase();
-            
-            // Remove (IMP) at the end or anywhere
             norm = norm.replace(/\(IMP\)/g, '');
-            
-            // Remove indicações de caixa com quantidades (ex: CX 24, CX 25, CX100)
             norm = norm.replace(/\bCX\s*\d+\b/g, '');
-            
-            // Remove numbers in parenthesis at the end e.g. (13.35) or (17,1)
-            // It looks for a space, then (, then digits, dots, commas, then ) at the end of string
             norm = norm.replace(/\s*\([\d.,]+\)\s*$/g, '');
-            
-            // Remove multiple spaces and trim
             norm = norm.replace(/\s{2,}/g, ' ').trim();
             return norm;
         }
@@ -765,7 +769,6 @@
             }
 
             try {
-                // Sincronizar Dicionário
                 if (urlDicionario) {
                     atualizarStatusVinculo('dicionario', 'Sincronizando...', null, false);
                     const resDic = await fetch(urlDicionario);
@@ -783,7 +786,6 @@
                     atualizarStatusVinculo('dicionario', 'Vinculado', new Date().toISOString(), true);
                 }
 
-                // Sincronizar Saldos
                 atualizarStatusVinculo('saldos', 'Sincronizando...', null, false);
                 const resSaldos = await fetch(urlSaldos);
                 if (!resSaldos.ok) throw new Error("Erro de Rede nos Saldos");
@@ -801,7 +803,6 @@
                 })).filter(s => s.Produto);
                 atualizarStatusVinculo('saldos', 'Vinculado', new Date().toISOString(), true);
 
-                // Sincronizar Vendas (SD2)
                 atualizarStatusVinculo('vendas', 'Sincronizando...', null, false);
                 const resVendas = await fetch(urlVendas);
                 if (!resVendas.ok) throw new Error("Erro de Rede nas Vendas");
@@ -818,7 +819,6 @@
                     TES: String(v['Tipo Saida'] || v['TES'] || '').trim()
                 })).filter(v => v.Produto);
                 
-                // Assign Normalized Desc to Sales based on dictionary or saldos to allow consolidated filtering
                 rawVendas.forEach(v => {
                     const dictMatch = rawDicionario.find(d => d.Produto === v.Produto);
                     if (dictMatch) {
@@ -832,7 +832,6 @@
 
                 atualizarStatusVinculo('vendas', 'Vinculado', new Date().toISOString(), true);
 
-                // Update UI Success
                 document.getElementById("data-source-badge").className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5";
                 document.getElementById("data-source-badge").innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span>Dados Reais Sincronizados`;
                 
@@ -888,7 +887,6 @@
                 selectEl.appendChild(opt);
             });
             
-            // Restaura a unidade de destino salva ou usa a Matriz CD (1) como padrão
             const savedBranch = localStorage.getItem('portal_target_branch');
             if (savedBranch && DIC_FILIAIS[savedBranch]) {
                 selectEl.value = savedBranch;
@@ -933,7 +931,6 @@
             const savedTES = localStorage.getItem('portal_selected_tes');
             if (savedTES) {
                 const parsed = JSON.parse(savedTES);
-                // Garante que só mantenha as TES salvas que ainda existem na planilha atual
                 selectedTES = parsed.filter(t => activeTES.includes(t));
             } else {
                 selectedTES = [...activeTES]; 
@@ -1165,11 +1162,9 @@
         }
 
         function getProductDescription(code) {
-            // First check Dictionary
             let cleanCode = normalizeProductCode(code);
             const dicMatch = rawDicionario.find(d => normalizeProductCode(d.Produto) === cleanCode);
             if (dicMatch) return dicMatch.Descricao;
-            // Fallback to Saldos
             const saldoMatch = rawSaldos.find(s => normalizeProductCode(s.Produto) === cleanCode);
             if (saldoMatch) return saldoMatch.Descricao;
             return "PRODUTO SEM DESCRIÇÃO";
@@ -1195,10 +1190,9 @@
             const searchVal = value.toLowerCase().trim();
             const normalizedSearchVal = normalizeProductCode(value).toLowerCase().trim();
             
-            // Map to store grouped results
             const groupedResults = {};
             const specificCodeMatches = [];
-            const aggregatedCodes = new Set(); // Para a Super Consolidação
+            const aggregatedCodes = new Set(); 
 
             const checkMatch = (code, desc, norm) => {
                 const isCodeMatch = String(code).toLowerCase().includes(searchVal) || normalizeProductCode(code).toLowerCase().includes(normalizedSearchVal);
@@ -1218,10 +1212,7 @@
                 }
             };
 
-            // 1. Search in Dictionary
             rawDicionario.forEach(d => checkMatch(d.Produto, d.Descricao, d.NormalizedDesc));
-
-            // 2. Search in Saldos (if not in dict)
             rawSaldos.forEach(s => checkMatch(s.Produto, s.Descricao, s.NormalizedDesc));
 
             if (specificCodeMatches.length === 0 && Object.keys(groupedResults).length === 0 && aggregatedCodes.size === 0) {
@@ -1229,7 +1220,6 @@
                 return;
             }
 
-            // --- NOVO: OPÇÃO DE SUPER CONSOLIDAÇÃO (Aparece no topo) ---
             if (aggregatedCodes.size > 1 && searchVal.length >= 3) {
                 const div = document.createElement("div");
                 div.className = "p-3 hover:bg-emerald-50 bg-emerald-50/30 text-xs text-slate-700 cursor-pointer transition border-b-2 border-emerald-500 flex flex-col";
@@ -1249,7 +1239,6 @@
                 listEl.appendChild(div);
             }
 
-            // Build UI for specific code matches
             specificCodeMatches.forEach(m => {
                 const div = document.createElement("div");
                 div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer transition flex items-center justify-between";
@@ -1261,13 +1250,12 @@
                     </div>
                 `;
                 div.onclick = function() {
-                    selectGlobalProduct(null, normDesc, null);
+                    selectGlobalProduct(m.code, null, null);
                     listEl.classList.add("hidden");
                 };
                 listEl.appendChild(div);
             });
 
-            // Build UI for Grouped Consolidations (removido o limite de exibição)
             Object.keys(groupedResults).forEach(normDesc => {
                 const productsInGroup = groupedResults[normDesc];
                 const codesPreview = productsInGroup.map(p => p.code).join(', ');
@@ -1293,16 +1281,32 @@
             listEl.classList.remove("hidden");
         }
 
-        // Modified select to handle specific code, normalized description, OR super search term
+        function handleGlobalProductKeyDown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const listEl = document.getElementById("global-autocomplete-list");
+                const firstOption = listEl.querySelector("div");
+                if (firstOption) {
+                    firstOption.click();
+                } else {
+                    const typedVal = event.target.value.trim();
+                    if (typedVal) {
+                        selectGlobalProduct(typedVal);
+                    }
+                }
+                listEl.classList.add("hidden");
+            }
+        }
+
         function selectGlobalProduct(code, normalizedDesc, searchTerm = null) {
             const inputEl = document.getElementById("global-product-code");
             const badgeEl = document.getElementById("global-um-badge");
             const bannerTypeEl = document.getElementById("banner-active-type");
             
-            // Reset all
             globalSelectedProductCode = "";
             globalSelectedProductNormalizedDesc = "";
             globalSelectedSearchTerm = "";
+            excludedSubCodes.clear(); // Reseta exclusões ao trocar de busca
 
             if (code) {
                 globalSelectedProductCode = normalizeProductCode(code);
@@ -1313,6 +1317,7 @@
                 const unit = getProductUnit(globalSelectedProductCode);
                 badgeEl.innerText = `UM: ${unit}`;
                 document.getElementById("sim-product-desc").innerText = getProductDescription(globalSelectedProductCode);
+                document.getElementById("banner-subcodes-container").classList.add("hidden");
             } else if (normalizedDesc) {
                 globalSelectedProductNormalizedDesc = normalizedDesc;
                 inputEl.value = normalizedDesc;
@@ -1321,6 +1326,7 @@
                 
                 badgeEl.innerText = `GRUPO`;
                 document.getElementById("sim-product-desc").innerText = normalizedDesc;
+                renderBannerSubCodes();
             } else if (searchTerm) {
                 globalSelectedSearchTerm = searchTerm;
                 inputEl.value = searchTerm;
@@ -1329,6 +1335,7 @@
                 
                 badgeEl.innerText = `MÚLTIPLOS`;
                 document.getElementById("sim-product-desc").innerText = `Analisando todos os materiais que contêm: "${searchTerm}"`;
+                renderBannerSubCodes();
             }
 
             document.getElementById("btn-clear-global-product").classList.remove("hidden");
@@ -1336,15 +1343,77 @@
             recalculateSimulation();
         }
 
+        // NOVO: Renderiza os subcódigos no banner com checkboxes interativos para marcar/desmarcar
+        function renderBannerSubCodes() {
+            const container = document.getElementById("banner-subcodes-container");
+            const listEl = document.getElementById("banner-subcodes-list");
+            const countEl = document.getElementById("banner-subcodes-count");
+            listEl.innerHTML = "";
+
+            let matchingCodes = new Set();
+            if (globalSelectedProductNormalizedDesc) {
+                rawSaldos.forEach(s => { if (s.NormalizedDesc === globalSelectedProductNormalizedDesc) matchingCodes.add(s.Produto); });
+                rawVendas.forEach(v => { if (v.NormalizedDesc === globalSelectedProductNormalizedDesc) matchingCodes.add(v.Produto); });
+                rawDicionario.forEach(d => { if (d.NormalizedDesc === globalSelectedProductNormalizedDesc) matchingCodes.add(d.Produto); });
+            } else if (globalSelectedSearchTerm) {
+                const term = globalSelectedSearchTerm.toLowerCase();
+                rawSaldos.forEach(s => { 
+                    if (String(s.Descricao).toLowerCase().includes(term) || String(s.NormalizedDesc).toLowerCase().includes(term) || String(s.Produto).toLowerCase().includes(term)) matchingCodes.add(s.Produto); 
+                });
+                rawVendas.forEach(v => { 
+                    if (String(v.NormalizedDesc).toLowerCase().includes(term) || String(v.Produto).toLowerCase().includes(term)) matchingCodes.add(v.Produto); 
+                });
+                rawDicionario.forEach(d => {
+                    if (String(d.Descricao).toLowerCase().includes(term) || String(d.NormalizedDesc).toLowerCase().includes(term) || String(d.Produto).toLowerCase().includes(term)) matchingCodes.add(d.Produto);
+                });
+            }
+
+            const codesArray = Array.from(matchingCodes).sort();
+            countEl.innerText = `${codesArray.length - excludedSubCodes.size}/${codesArray.length} ativos`;
+
+            if (codesArray.length <= 1) {
+                container.classList.add("hidden");
+                return;
+            }
+
+            codesArray.forEach(code => {
+                const desc = getProductDescription(code);
+                const isChecked = !excludedSubCodes.has(code);
+                
+                const itemDiv = document.createElement("label");
+                itemDiv.className = `flex items-center gap-2 p-1.5 rounded-lg border text-xs cursor-pointer transition ${isChecked ? 'bg-amazonBlue-50/50 border-amazonBlue-200 text-slate-800 font-semibold' : 'bg-slate-100 border-slate-200 text-slate-400 line-through'}`;
+                itemDiv.innerHTML = `
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleSubCodeExclusion('${code}', this.checked)" class="rounded text-amazonBlue-600 focus:ring-0">
+                    <span class="truncate"><strong class="text-amazonBlue-700">${code}</strong> - ${desc}</span>
+                `;
+                listEl.appendChild(itemDiv);
+            });
+
+            container.classList.remove("hidden");
+        }
+
+        function toggleSubCodeExclusion(code, isIncluded) {
+            if (isIncluded) {
+                excludedSubCodes.delete(code);
+            } else {
+                excludedSubCodes.add(code);
+            }
+            renderBannerSubCodes();
+            applyFilters();
+            recalculateSimulation();
+        }
+
         function clearGlobalProduct() {
             globalSelectedProductCode = "";
             globalSelectedProductNormalizedDesc = "";
-            globalSelectedSearchTerm = ""; // NOVO
+            globalSelectedSearchTerm = ""; 
+            excludedSubCodes.clear();
             document.getElementById("global-product-code").value = "";
             document.getElementById("global-um-badge").innerText = "Todos";
             document.getElementById("banner-active-type").innerText = "Material Ativo para Análise";
             document.getElementById("banner-active-type").className = "text-[10px] text-amazonRed-600 uppercase font-black tracking-wider";
             document.getElementById("sim-product-desc").innerText = "Nenhum material selecionado. Use o filtro superior para iniciar.";
+            document.getElementById("banner-subcodes-container").classList.add("hidden");
             document.getElementById("btn-clear-global-product").classList.add("hidden");
             
             applyFilters();
@@ -1505,42 +1574,35 @@
             applyFilters();
         }
 
-        // Updated filtering logic to handle globalSelectedProductNormalizedDesc
+        // Updated helper to check if item matches current global product filter (respecting exclusions)
+        function matchesGlobalProduct(item) {
+            if (globalSelectedProductCode) {
+                return item.Produto === globalSelectedProductCode;
+            } else if (globalSelectedProductNormalizedDesc) {
+                if (excludedSubCodes.has(item.Produto)) return false;
+                return item.NormalizedDesc === globalSelectedProductNormalizedDesc;
+            } else if (globalSelectedSearchTerm) {
+                if (excludedSubCodes.has(item.Produto)) return false;
+                return String(item.Descricao).toLowerCase().includes(globalSelectedSearchTerm) || 
+                       String(item.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || 
+                       String(item.Produto).toLowerCase().includes(globalSelectedSearchTerm);
+            }
+            return true;
+        }
+
         function applyFilters() {
             isSingleMonthView = (salesFromPeriod && salesToPeriod && salesFromPeriod === salesToPeriod) || (currentPeriodType === 'current');
 
             filteredSaldos = rawSaldos.filter(item => {
                 const matchBranch = selectedBranches.includes(parseInt(item.Filial));
                 const matchWarehouse = selectedSaldosWarehouses.includes(parseInt(item.Armazem));
-                
-                let matchGlobalProduct = true;
-                if (globalSelectedProductCode) {
-                    matchGlobalProduct = item.Produto === globalSelectedProductCode;
-                } else if (globalSelectedProductNormalizedDesc) {
-                    matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
-                } else if (globalSelectedSearchTerm) {
-                    matchGlobalProduct = String(item.Descricao).toLowerCase().includes(globalSelectedSearchTerm) || 
-                                         String(item.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || 
-                                         String(item.Produto).toLowerCase().includes(globalSelectedSearchTerm);
-                }
-
-                return matchBranch && matchWarehouse && matchGlobalProduct;
+                return matchBranch && matchWarehouse && matchesGlobalProduct(item);
             });
 
             filteredVendas = rawVendas.filter(item => {
                 const matchBranch = selectedBranches.includes(parseInt(item.Filial));
                 const matchWarehouse = selectedVendasWarehouses.includes(parseInt(item.Armazem));
                 const matchTES = selectedTES.length === 0 || selectedTES.includes(item.TES);
-
-                let matchGlobalProduct = true;
-                if (globalSelectedProductCode) {
-                    matchGlobalProduct = item.Produto === globalSelectedProductCode;
-                } else if (globalSelectedProductNormalizedDesc) {
-                    matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
-                } else if (globalSelectedSearchTerm) {
-                    matchGlobalProduct = String(item.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || 
-                                         String(item.Produto).toLowerCase().includes(globalSelectedSearchTerm);
-                }
 
                 let matchPeriod = true;
                 if (item.Emissao && item.Emissao !== 'Data N/D') {
@@ -1549,7 +1611,7 @@
                     if (salesToPeriod && itemYrMo > salesToPeriod) matchPeriod = false;
                 }
 
-                return matchBranch && matchWarehouse && matchGlobalProduct && matchPeriod && matchTES;
+                return matchBranch && matchWarehouse && matchesGlobalProduct(item) && matchPeriod && matchTES;
             });
 
             updateKPIs();
@@ -1612,12 +1674,10 @@
             recalculateSimulation();
         }
 
-        // Updated Simulation to calculate aggregated totals across consolidated products
         function recalculateSimulation() {
             const qtyToRequest = parseFloat(document.getElementById("sim-qty").value) || 0;
             const targetBranch = parseInt(document.getElementById("sim-target-branch").value);
             
-            // Salva a unidade de simulação escolhida no navegador
             localStorage.setItem('portal_target_branch', targetBranch);
 
             if (!globalSelectedProductCode && !globalSelectedProductNormalizedDesc && !globalSelectedSearchTerm) {
@@ -1628,26 +1688,13 @@
                 return;
             }
 
-            let activeUnit = "PC"; // Default unit for simulation display
+            let activeUnit = "PC"; 
             if (globalSelectedProductCode) {
                  activeUnit = getProductUnit(globalSelectedProductCode);
             } 
-            // If it's a consolidated group, we assume they share the same unit.
 
-            // Get product sets based on active filter mode
-            let productSaldos = [];
-            let productVendas = [];
-            
-            if (globalSelectedProductCode) {
-                productSaldos = rawSaldos.filter(s => s.Produto === globalSelectedProductCode && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
-                productVendas = rawVendas.filter(v => v.Produto === globalSelectedProductCode && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
-            } else if (globalSelectedProductNormalizedDesc) {
-                productSaldos = rawSaldos.filter(s => s.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
-                productVendas = rawVendas.filter(v => v.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
-            } else if (globalSelectedSearchTerm) {
-                productSaldos = rawSaldos.filter(s => (String(s.Descricao).toLowerCase().includes(globalSelectedSearchTerm) || String(s.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || String(s.Produto).toLowerCase().includes(globalSelectedSearchTerm)) && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
-                productVendas = rawVendas.filter(v => (String(v.NormalizedDesc).toLowerCase().includes(globalSelectedSearchTerm) || String(v.Produto).toLowerCase().includes(globalSelectedSearchTerm)) && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
-            }
+            let productSaldos = rawSaldos.filter(s => matchesGlobalProduct(s) && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
+            let productVendas = rawVendas.filter(v => matchesGlobalProduct(v) && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
 
             const analysisMonthsKeys = MONTHS_ANALYSIS.map(m => m.key);
             const salesMap = {};
@@ -1661,16 +1708,13 @@
                 }
             });
 
-            // Curve ABC Logic mapping (Aggregated if consolidated)
             const branchProductQuantity = {};
             rawVendas.forEach(v => {
                 if (selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES))) {
                     if (!branchProductQuantity[v.Filial]) branchProductQuantity[v.Filial] = {};
-                    
-                    // Group by appropriate key for ABC curve
                     let trackingKey = v.Produto;
                     if (globalSelectedProductNormalizedDesc) trackingKey = v.NormalizedDesc;
-                    if (globalSelectedSearchTerm) trackingKey = "SUPER_GROUP"; // Treat all matches as ONE product for ABC
+                    if (globalSelectedSearchTerm) trackingKey = "SUPER_GROUP";
 
                     branchProductQuantity[v.Filial][trackingKey] = (branchProductQuantity[v.Filial][trackingKey] || 0) + v.Quantidade;
                 }
@@ -1941,11 +1985,9 @@
         }
 
         function renderTablesAndLists() {
-            // Ranking (Groups by NormalizedDesc to avoid splitting identical items with (IMP))
             const topProducts = {};
             filteredVendas.forEach(v => {
                 let trackKey = v.NormalizedDesc || v.Produto;
-                let trackCode = v.Produto;
                 if (!topProducts[trackKey]) topProducts[trackKey] = { codes: new Set(), qtd: 0, faturamento: 0 };
                 topProducts[trackKey].codes.add(v.Produto);
                 topProducts[trackKey].qtd += v.Quantidade;
@@ -1970,8 +2012,6 @@
                     const row = document.createElement("tr");
                     row.className = "hover:bg-slate-50 transition text-xs";
                     
-                    // Determine action button based on whether it's a grouped normalized desc or single code
-                    // Since ranking now groups by normalized desc inherently, we trigger group inspection
                     row.innerHTML = `
                         <td class="py-3 px-4 font-semibold text-slate-800">
                             <div class="flex items-center gap-2 mb-0.5">
@@ -1991,7 +2031,6 @@
                 });
             }
 
-            // Alertas Críticos (Uses specific codes to identify physical stock gaps)
             let maxDateStr = "";
             rawVendas.forEach(v => {
                 if (v.Emissao && v.Emissao !== 'Data N/D' && v.Emissao > maxDateStr) maxDateStr = v.Emissao;
@@ -2079,7 +2118,6 @@
                 });
             }
 
-            // Analítico
             const tbodySearch = document.getElementById("search-results-tbody");
             tbodySearch.innerHTML = "";
             if (filteredSaldos.length === 0) {
