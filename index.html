@@ -212,7 +212,7 @@
                     </div>
                 </div>
 
-                <!-- Novo Filtro de TES (Tipo Saida) -->
+                <!-- Filtro de TES (Tipo Saida) -->
                 <div class="flex-1 min-w-[150px] space-y-1.5 relative">
                     <label class="text-xs font-bold text-slate-600 flex items-center justify-between">
                         <span class="flex items-center gap-1"><i class="fa-solid fa-right-left text-indigo-500"></i> Tipos (TES)</span>
@@ -232,15 +232,15 @@
                 </div>
             </div>
 
-            <!-- Pesquisa de Produto Global -->
+            <!-- Pesquisa de Produto Global Consolidada -->
             <div class="flex flex-col lg:flex-row items-end gap-4 mt-4 w-full">
                 <div class="flex-1 w-full space-y-1.5 relative">
                     <label class="text-xs font-bold text-slate-600 flex justify-between items-center">
-                        <span class="flex items-center gap-1"><i class="fa-solid fa-barcode text-amazonBlue-500"></i> Material Ativo (Filtro Global)</span>
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-barcode text-amazonBlue-500"></i> Material Ativo (Busca Consolidada)</span>
                         <span id="global-um-badge" class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase font-bold">Todos</span>
                     </label>
                     <div class="relative">
-                        <input type="text" id="global-product-code" placeholder="Digite o código do material ou descrição..." 
+                        <input type="text" id="global-product-code" placeholder="Digite código, descrição ou base consolidada..." 
                                class="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-8 py-2 text-sm text-slate-700 focus:outline-none focus:border-amazonBlue-500 transition font-bold"
                                oninput="handleGlobalProductInput(this.value)"
                                onkeydown="handleGlobalProductKeyDown(event)">
@@ -269,15 +269,15 @@
             <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                     <div class="p-2.5 bg-amazonBlue-50 text-amazonBlue-600 rounded-xl border border-amazonBlue-100 shadow-sm">
-                        <i class="fa-solid fa-barcode text-xl"></i>
+                        <i class="fa-solid fa-layer-group text-xl"></i>
                     </div>
                     <div>
-                        <span class="text-[10px] text-amazonRed-600 uppercase font-black tracking-wider">Material Ativo para Análise</span>
+                        <span class="text-[10px] text-amazonRed-600 uppercase font-black tracking-wider" id="banner-active-type">Material Ativo para Análise</span>
                         <h3 id="sim-product-desc" class="text-sm font-bold text-slate-800 mt-0.5">Nenhum material selecionado. Use o filtro superior para iniciar.</h3>
                     </div>
                 </div>
                 <div class="text-[11px] text-slate-500 font-semibold italic text-left md:text-right">
-                    * Defina o material de análise na barra de busca superior.
+                    * Consolida saldos e vendas de variações quando a busca base é selecionada.
                 </div>
             </div>
         </div>
@@ -414,7 +414,7 @@
                     <table class="w-full text-left text-sm border-collapse">
                         <thead>
                             <tr class="border-b border-slate-200 text-slate-500 text-xs uppercase font-bold tracking-wider bg-slate-50">
-                                <th class="py-3 px-4">Código</th><th class="py-3 px-4">Qtd. Total Vendida</th><th class="py-3 px-4">Faturamento Bruto</th><th class="py-3 px-4">Preço Médio Praticado</th><th class="py-3 px-4 text-right">Ação</th>
+                                <th class="py-3 px-4">Código / Base</th><th class="py-3 px-4">Qtd. Total Vendida</th><th class="py-3 px-4">Faturamento Bruto</th><th class="py-3 px-4">Preço Médio Praticado</th><th class="py-3 px-4 text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody id="top-products-tbody" class="divide-y divide-slate-100 text-slate-600">
@@ -449,7 +449,7 @@
             <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm font-medium">
                 <div class="flex justify-between items-center mb-4">
                     <div>
-                        <h3 class="text-sm font-bold text-slate-800">Alertas de Reposição e Ruptura (Cobertura &lt; 3 Meses)</h3>
+                        <h3 class="text-sm font-bold text-slate-800">Alertas de Reposição e Ruptura</h3>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
@@ -531,6 +531,7 @@
         let selectedTES = [];
 
         let globalSelectedProductCode = "";
+        let globalSelectedProductNormalizedDesc = ""; // Store normalized desc for grouping
 
         let salesFromPeriod = "";
         let salesToPeriod = "";
@@ -555,9 +556,6 @@
             loadConfigPaths();
             buildTargetBranchSelect();
             clearGlobalProduct();
-            
-            // Try to load cached data right away if paths exist (Optional local storage caching could be here)
-            // For now, relies on the user pressing 'Sincronizar'
             
             window.addEventListener('click', function(e) {
                 ['branch', 'saldos-warehouse', 'vendas-warehouse', 'tes'].forEach(t => {
@@ -584,11 +582,8 @@
 
         function formatGoogleSheetsURL(url) {
             if (!url) return url;
-            
-            // Pega o ID da planilha e o GID e converte sempre para a API gviz (evita bloqueio CORS)
             const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
             const gidMatch = url.match(/gid=([0-9]+)/);
-            
             if (match) {
                 let newUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv`;
                 if (gidMatch) newUrl += `&gid=${gidMatch[1]}`;
@@ -605,7 +600,6 @@
         }
 
         function loadConfigPaths() {
-            // Usando endpoint gviz padrão para evitar bloqueios CORS
             const defaultDic = "https://docs.google.com/spreadsheets/d/1cGUFGI0W3Y4nHdMHQo6K3gLhp3pVtJizdPrwEhYemfM/gviz/tq?tqx=out:csv&gid=0";
             const defaultSD2 = "https://docs.google.com/spreadsheets/d/1tC4vM8B-kfu3RJ4GhIFOSw3v-xDiR16q-x7SPA6UdK4/gviz/tq?tqx=out:csv&gid=1517514347";
             const defaultSaldos = "https://docs.google.com/spreadsheets/d/1Jatt76QyCs0OlwUuLM19a58JoJ01oK-DD8UVKPFhQV4/gviz/tq?tqx=out:csv&gid=0";
@@ -614,7 +608,6 @@
             let savedVendas = localStorage.getItem("portal_url_vendas");
             let savedSaldos = localStorage.getItem("portal_url_saldos");
 
-            // Substitui automaticamente links /pub antigos em cache pelos da nova API
             if(savedDic && savedDic.includes("/pub?")) savedDic = defaultDic;
             if(savedVendas && savedVendas.includes("/pub?")) savedVendas = defaultSD2;
             if(savedSaldos && savedSaldos.includes("/pub?")) savedSaldos = defaultSaldos;
@@ -656,7 +649,7 @@
                 const headers = ret[0].map(h => h.trim());
                 const data = [];
                 for (let j = 1; j < ret.length; j++) {
-                    if (ret[j].length === 1 && ret[j][0] === '') continue; // Skip empty rows
+                    if (ret[j].length === 1 && ret[j][0] === '') continue; 
                     let obj = {};
                     headers.forEach((h, idx) => { obj[h] = ret[j][idx]; });
                     data.push(obj);
@@ -668,7 +661,6 @@
 
         function formatExcelDate(dateStr) {
             if (!dateStr) return 'Data N/D';
-            // If it's already DD/MM/YYYY, convert to YYYY-MM-DD for easy sorting
             const parts = dateStr.trim().split('/');
             if (parts.length === 3) {
                 return `${parts[2]}-${parts[1]}-${parts[0]}`;
@@ -678,7 +670,29 @@
 
         function normalizeProductCode(code) {
             if (code === undefined || code === null) return '';
-            return String(code).trim(); // Keep exact string format to preserve leading zeros
+            let cleanStr = String(code).trim();
+            // Remove leading zeros only if the string is purely numeric
+            if (/^\d+$/.test(cleanStr)) {
+               return cleanStr.replace(/^0+/, '');
+            }
+            return cleanStr;
+        }
+
+        // New function to normalize descriptions for grouping
+        function normalizeDescription(desc) {
+            if (!desc) return '';
+            let norm = desc.toUpperCase();
+            
+            // Remove (IMP) at the end or anywhere
+            norm = norm.replace(/\(IMP\)/g, '');
+            
+            // Remove numbers in parenthesis at the end e.g. (13.35) or (17,1)
+            // It looks for a space, then (, then digits, dots, commas, then ) at the end of string
+            norm = norm.replace(/\s*\([\d.,]+\)\s*$/g, '');
+            
+            // Remove multiple spaces and trim
+            norm = norm.replace(/\s{2,}/g, ' ').trim();
+            return norm;
         }
 
         function calculateLatestSaleDate() {
@@ -704,7 +718,6 @@
             }
         }
 
-        // This is the core function you asked for, globally defined and ready.
         async function triggerSync() {
             const urlVendas = document.getElementById("url-vendas").value;
             const urlSaldos = document.getElementById("url-saldos").value;
@@ -730,10 +743,10 @@
                     const csvDic = await resDic.text();
                     const parsedDic = parseCSV(csvDic, true);
                     rawDicionario = parsedDic.map(d => {
-                        // Acessando as colunas pelos nomes exatos do seu print
                         return {
                             Produto: normalizeProductCode(d['Código']),
                             Descricao: String(d['Descrição Sistema'] || 'PRODUTO SEM DESCRIÇÃO').trim(),
+                            NormalizedDesc: normalizeDescription(d['Descrição Sistema']),
                             Unidade: String(d['UM'] || 'PC').trim()
                         };
                     }).filter(d => d.Produto !== '');
@@ -749,6 +762,7 @@
                 rawSaldos = parsedSaldos.map(s => ({
                     Produto: normalizeProductCode(s['Produto']),
                     Descricao: String(s['Descricao'] || 'PRODUTO SEM DESCRIÇÃO'),
+                    NormalizedDesc: normalizeDescription(s['Descricao']),
                     Grupo: String(s['Grupo'] || 'Outros'),
                     Filial: parseInt(s['Filial']) || 1,
                     Armazem: parseInt(s['Armazem']) || 1,
@@ -770,9 +784,22 @@
                     "Vlr.Total": parseFloat((v['Vlr.Total'] || '0').replace(/[R$\s]/g,'').replace(/\./g, '').replace(',','.')) || 0,
                     Emissao: formatExcelDate(v['Emissao']),
                     Armazem: parseInt(v['Armazem']) || 1,
-                    Unidade: 'PC', // Fallback, we get it from dictionary later if needed
+                    Unidade: 'PC', 
                     TES: String(v['Tipo Saida'] || v['TES'] || '').trim()
                 })).filter(v => v.Produto);
+                
+                // Assign Normalized Desc to Sales based on dictionary or saldos to allow consolidated filtering
+                rawVendas.forEach(v => {
+                    const dictMatch = rawDicionario.find(d => d.Produto === v.Produto);
+                    if (dictMatch) {
+                        v.NormalizedDesc = dictMatch.NormalizedDesc;
+                    } else {
+                        const saldoMatch = rawSaldos.find(s => s.Produto === v.Produto);
+                        if (saldoMatch) v.NormalizedDesc = saldoMatch.NormalizedDesc;
+                        else v.NormalizedDesc = "DESCONHECIDO";
+                    }
+                });
+
                 atualizarStatusVinculo('vendas', 'Vinculado', new Date().toISOString(), true);
 
                 // Update UI Success
@@ -793,14 +820,11 @@
 
             } catch (error) {
                 console.error("Erro na sincronização:", error);
-                
-                // Tratamento específico de erros de rede/CORS
                 if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
                     showToast(`Bloqueio de Acesso: Verifique se as planilhas estão compartilhadas como "Qualquer pessoa com o link".`);
                 } else {
                     showToast(`Erro na sincronização: Verifique os links inseridos.`);
                 }
-                
                 atualizarStatusVinculo('vendas', 'Falha (CORS/URL)', null, false);
                 atualizarStatusVinculo('saldos', 'Falha (CORS/URL)', null, false);
             } finally {
@@ -823,6 +847,7 @@
             const currentDropdown = document.getElementById(`${idPrefix}-dropdown-list`);
             if(currentDropdown) currentDropdown.classList.toggle("hidden");
         }
+        
         function buildTargetBranchSelect() {
             const selectEl = document.getElementById("sim-target-branch");
             if(!selectEl) return;
@@ -854,7 +879,7 @@
             const setTES = new Set();
             rawVendas.forEach(v => { if(v.TES) setTES.add(v.TES); });
             activeTES = Array.from(setTES).sort();
-            selectedTES = [...activeTES]; // Seleciona todas as TES por padrão inicialmente
+            selectedTES = [...activeTES]; 
             renderTESCheckboxes();
         }
 
@@ -1066,18 +1091,20 @@
 
         function getProductDescription(code) {
             // First check Dictionary
-            const dicMatch = rawDicionario.find(d => d.Produto === code);
+            let cleanCode = normalizeProductCode(code);
+            const dicMatch = rawDicionario.find(d => normalizeProductCode(d.Produto) === cleanCode);
             if (dicMatch) return dicMatch.Descricao;
             // Fallback to Saldos
-            const saldoMatch = rawSaldos.find(s => s.Produto === code);
+            const saldoMatch = rawSaldos.find(s => normalizeProductCode(s.Produto) === cleanCode);
             if (saldoMatch) return saldoMatch.Descricao;
             return "PRODUTO SEM DESCRIÇÃO";
         }
 
         function getProductUnit(code) {
-            const dicMatch = rawDicionario.find(d => d.Produto === code);
+            let cleanCode = normalizeProductCode(code);
+            const dicMatch = rawDicionario.find(d => normalizeProductCode(d.Produto) === cleanCode);
             if (dicMatch) return dicMatch.Unidade;
-            const saldoMatch = rawSaldos.find(s => s.Produto === code);
+            const saldoMatch = rawSaldos.find(s => normalizeProductCode(s.Produto) === cleanCode);
             if (saldoMatch) return saldoMatch.Unidade;
             return "PC";
         }
@@ -1091,40 +1118,90 @@
             }
 
             const searchVal = value.toLowerCase().trim();
-            const uniqueProds = {};
+            const normalizedSearchVal = normalizeProductCode(value).toLowerCase().trim();
             
+            // Map to store grouped results: key is NormalizedDesc, value is array of objects {code, desc}
+            const groupedResults = {};
+            // Array for exact specific code matches
+            const specificCodeMatches = [];
+
+            // 1. Search in Dictionary
             rawDicionario.forEach(d => {
-                if (d.Produto.toLowerCase().includes(searchVal) || d.Descricao.toLowerCase().includes(searchVal)) {
-                    uniqueProds[d.Produto] = d.Descricao;
-                }
-            });
-            rawSaldos.forEach(s => {
-                if (s.Produto.toLowerCase().includes(searchVal) || s.Descricao.toLowerCase().includes(searchVal)) {
-                    if (!uniqueProds[s.Produto]) uniqueProds[s.Produto] = s.Descricao;
-                }
-            });
-            rawVendas.forEach(v => {
-                if (v.Produto.toLowerCase().includes(searchVal)) {
-                    if (!uniqueProds[v.Produto]) uniqueProds[v.Produto] = "[Produto sem estoque físico atual]";
+                const isCodeMatch = d.Produto.toLowerCase().includes(searchVal) || normalizeProductCode(d.Produto).toLowerCase().includes(normalizedSearchVal);
+                const isDescMatch = d.Descricao.toLowerCase().includes(searchVal) || d.NormalizedDesc.toLowerCase().includes(searchVal);
+                
+                if (isCodeMatch) {
+                    specificCodeMatches.push({code: d.Produto, desc: d.Descricao, norm: d.NormalizedDesc});
+                } else if (isDescMatch) {
+                    if (!groupedResults[d.NormalizedDesc]) groupedResults[d.NormalizedDesc] = [];
+                    // Only add if code is not already in this group
+                    if (!groupedResults[d.NormalizedDesc].find(x => x.code === d.Produto)) {
+                        groupedResults[d.NormalizedDesc].push({code: d.Produto, desc: d.Descricao});
+                    }
                 }
             });
 
-            const keys = Object.keys(uniqueProds).slice(0, 10);
-            if (keys.length === 0) {
+            // 2. Search in Saldos (if not in dict)
+            rawSaldos.forEach(s => {
+                const isCodeMatch = s.Produto.toLowerCase().includes(searchVal) || normalizeProductCode(s.Produto).toLowerCase().includes(normalizedSearchVal);
+                const isDescMatch = s.Descricao.toLowerCase().includes(searchVal) || s.NormalizedDesc.toLowerCase().includes(searchVal);
+                
+                if (isCodeMatch && !specificCodeMatches.find(x => x.code === s.Produto)) {
+                    specificCodeMatches.push({code: s.Produto, desc: s.Descricao, norm: s.NormalizedDesc});
+                } else if (isDescMatch) {
+                    if (!groupedResults[s.NormalizedDesc]) groupedResults[s.NormalizedDesc] = [];
+                    if (!groupedResults[s.NormalizedDesc].find(x => x.code === s.Produto)) {
+                        groupedResults[s.NormalizedDesc].push({code: s.Produto, desc: s.Descricao});
+                    }
+                }
+            });
+
+            if (specificCodeMatches.length === 0 && Object.keys(groupedResults).length === 0) {
                 listEl.classList.add("hidden");
                 return;
             }
 
-            keys.forEach(k => {
+            // Build UI for specific code matches
+            specificCodeMatches.slice(0, 5).forEach(m => {
                 const div = document.createElement("div");
-                div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer transition truncate";
-                div.innerHTML = `<span class="font-bold text-amazonBlue-600 mr-2">${k}</span> ${uniqueProds[k]}`;
+                div.className = "p-2.5 hover:bg-slate-50 text-xs text-slate-700 cursor-pointer transition flex items-center justify-between";
+                div.innerHTML = `
+                    <div class="truncate">
+                        <span class="font-bold text-amazonRed-600 mr-2 border border-amazonRed-200 px-1 rounded">Específico</span>
+                        <span class="font-bold text-amazonBlue-600 mr-2">${m.code}</span> 
+                        <span>${m.desc}</span>
+                    </div>
+                `;
                 div.onclick = function() {
-                    selectGlobalProduct(k);
+                    selectGlobalProduct(m.code, null);
                     listEl.classList.add("hidden");
                 };
                 listEl.appendChild(div);
             });
+
+            // Build UI for Grouped Consolidations
+            Object.keys(groupedResults).slice(0, 5).forEach(normDesc => {
+                const productsInGroup = groupedResults[normDesc];
+                const codesPreview = productsInGroup.map(p => p.code).join(', ');
+                
+                const div = document.createElement("div");
+                div.className = "p-2.5 hover:bg-amazonBlue-50 bg-slate-50 text-xs text-slate-700 cursor-pointer transition border-t border-slate-200 flex flex-col";
+                div.innerHTML = `
+                    <div class="font-bold text-slate-800 flex items-center gap-2">
+                        <span class="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[9px] uppercase font-black">Consolidado</span>
+                        ${normDesc}
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1 truncate">
+                        Códigos consolidados: <span class="font-semibold">${codesPreview}</span>
+                    </div>
+                `;
+                div.onclick = function() {
+                    selectGlobalProduct(null, normDesc);
+                    listEl.classList.add("hidden");
+                };
+                listEl.appendChild(div);
+            });
+
             listEl.classList.remove("hidden");
         }
 
@@ -1137,35 +1214,52 @@
                     firstOption.click();
                 } else {
                     const typedVal = event.target.value.trim();
-                    if (typedVal) selectGlobalProduct(typedVal);
+                    if (typedVal) selectGlobalProduct(typedVal, null); // Fallback to specific search
                 }
                 listEl.classList.add("hidden");
             }
         }
 
-        function selectGlobalProduct(code) {
-            globalSelectedProductCode = normalizeProductCode(code);
-            document.getElementById("global-product-code").value = globalSelectedProductCode;
-            
+        // Modified select to handle either a specific code OR a normalized description
+        function selectGlobalProduct(code, normalizedDesc) {
+            const inputEl = document.getElementById("global-product-code");
             const badgeEl = document.getElementById("global-um-badge");
+            const bannerTypeEl = document.getElementById("banner-active-type");
             
-            if (globalSelectedProductCode) {
+            if (code) {
+                globalSelectedProductCode = normalizeProductCode(code);
+                globalSelectedProductNormalizedDesc = "";
+                inputEl.value = globalSelectedProductCode;
+                bannerTypeEl.innerText = "Material Específico Ativo";
+                bannerTypeEl.className = "text-[10px] text-amazonRed-600 uppercase font-black tracking-wider";
+                
                 const unit = getProductUnit(globalSelectedProductCode);
                 badgeEl.innerText = `UM: ${unit}`;
-                document.getElementById("btn-clear-global-product").classList.remove("hidden");
-            } else {
-                badgeEl.innerText = "TODOS";
-                document.getElementById("btn-clear-global-product").classList.add("hidden");
+                document.getElementById("sim-product-desc").innerText = getProductDescription(globalSelectedProductCode);
+            } else if (normalizedDesc) {
+                globalSelectedProductCode = "";
+                globalSelectedProductNormalizedDesc = normalizedDesc;
+                inputEl.value = normalizedDesc;
+                bannerTypeEl.innerText = "Grupo Consolidado Ativo";
+                bannerTypeEl.className = "text-[10px] text-indigo-600 uppercase font-black tracking-wider";
+                
+                badgeEl.innerText = `GRUPO`;
+                document.getElementById("sim-product-desc").innerText = normalizedDesc;
             }
 
+            document.getElementById("btn-clear-global-product").classList.remove("hidden");
             applyFilters();
             recalculateSimulation();
         }
 
         function clearGlobalProduct() {
             globalSelectedProductCode = "";
+            globalSelectedProductNormalizedDesc = "";
             document.getElementById("global-product-code").value = "";
             document.getElementById("global-um-badge").innerText = "Todos";
+            document.getElementById("banner-active-type").innerText = "Material Ativo para Análise";
+            document.getElementById("banner-active-type").className = "text-[10px] text-amazonRed-600 uppercase font-black tracking-wider";
+            document.getElementById("sim-product-desc").innerText = "Nenhum material selecionado. Use o filtro superior para iniciar.";
             document.getElementById("btn-clear-global-product").classList.add("hidden");
             
             applyFilters();
@@ -1215,7 +1309,6 @@
             if (sortedPeriods.length === 0) return;
 
             let baseDate = new Date(); 
-            // Fallback base date strictly for demonstration logic matching
             if(sortedPeriods[sortedPeriods.length-1]) {
                 const parts = sortedPeriods[sortedPeriods.length-1].split('-');
                 baseDate = new Date(parts[0], parts[1]-1, 15);
@@ -1326,21 +1419,35 @@
             applyFilters();
         }
 
+        // Updated filtering logic to handle globalSelectedProductNormalizedDesc
         function applyFilters() {
             isSingleMonthView = (salesFromPeriod && salesToPeriod && salesFromPeriod === salesToPeriod) || (currentPeriodType === 'current');
 
             filteredSaldos = rawSaldos.filter(item => {
                 const matchBranch = selectedBranches.includes(parseInt(item.Filial));
                 const matchWarehouse = selectedSaldosWarehouses.includes(parseInt(item.Armazem));
-                const matchGlobalProduct = !globalSelectedProductCode || item.Produto === globalSelectedProductCode;
+                
+                let matchGlobalProduct = true;
+                if (globalSelectedProductCode) {
+                    matchGlobalProduct = item.Produto === globalSelectedProductCode;
+                } else if (globalSelectedProductNormalizedDesc) {
+                    matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
+                }
+
                 return matchBranch && matchWarehouse && matchGlobalProduct;
             });
 
             filteredVendas = rawVendas.filter(item => {
                 const matchBranch = selectedBranches.includes(parseInt(item.Filial));
                 const matchWarehouse = selectedVendasWarehouses.includes(parseInt(item.Armazem));
-                const matchGlobalProduct = !globalSelectedProductCode || item.Produto === globalSelectedProductCode;
                 const matchTES = selectedTES.length === 0 || selectedTES.includes(item.TES);
+
+                let matchGlobalProduct = true;
+                if (globalSelectedProductCode) {
+                    matchGlobalProduct = item.Produto === globalSelectedProductCode;
+                } else if (globalSelectedProductNormalizedDesc) {
+                    matchGlobalProduct = item.NormalizedDesc === globalSelectedProductNormalizedDesc;
+                }
 
                 let matchPeriod = true;
                 if (item.Emissao && item.Emissao !== 'Data N/D') {
@@ -1412,25 +1519,36 @@
             recalculateSimulation();
         }
 
+        // Updated Simulation to calculate aggregated totals across consolidated products
         function recalculateSimulation() {
             const qtyToRequest = parseFloat(document.getElementById("sim-qty").value) || 0;
             const targetBranch = parseInt(document.getElementById("sim-target-branch").value);
 
-            if (!globalSelectedProductCode) {
-                document.getElementById("sim-product-desc").innerHTML = `<span class="text-amber-600 font-bold"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>NENHUM PRODUTO SELECIONADO:</span> Digite um material na barra de busca superior para analisar os dados de cobertura.`;
+            if (!globalSelectedProductCode && !globalSelectedProductNormalizedDesc) {
                 document.getElementById("sim-tbody").innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Selecione um código de produto na busca superior para iniciar a análise.</td></tr>`;
                 document.getElementById("sim-fatiada-tbody").innerHTML = "";
-                document.getElementById("sim-total-saldo-pos").innerText = "0 PC";
+                document.getElementById("sim-total-saldo-pos").innerText = "0";
                 document.getElementById("sim-alert-box").classList.add("hidden");
                 return;
             }
 
-            const activeDesc = getProductDescription(globalSelectedProductCode);
-            const activeUnit = getProductUnit(globalSelectedProductCode);
-            document.getElementById("sim-product-desc").innerText = activeDesc;
+            let activeUnit = "PC"; // Default unit for simulation display
+            if (globalSelectedProductCode) {
+                 activeUnit = getProductUnit(globalSelectedProductCode);
+            } 
+            // If it's a consolidated group, we assume they share the same unit.
 
-            const productSaldos = rawSaldos.filter(s => s.Produto === globalSelectedProductCode && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
-            const productVendas = rawVendas.filter(v => v.Produto === globalSelectedProductCode && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
+            // Get product sets based on active filter mode
+            let productSaldos = [];
+            let productVendas = [];
+            
+            if (globalSelectedProductCode) {
+                productSaldos = rawSaldos.filter(s => s.Produto === globalSelectedProductCode && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
+                productVendas = rawVendas.filter(v => v.Produto === globalSelectedProductCode && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
+            } else if (globalSelectedProductNormalizedDesc) {
+                productSaldos = rawSaldos.filter(s => s.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedSaldosWarehouses.includes(parseInt(s.Armazem)));
+                productVendas = rawVendas.filter(v => v.NormalizedDesc === globalSelectedProductNormalizedDesc && selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES)));
+            }
 
             const analysisMonthsKeys = MONTHS_ANALYSIS.map(m => m.key);
             const salesMap = {};
@@ -1444,12 +1562,14 @@
                 }
             });
 
-            // Curve ABC Logic mapping
+            // Curve ABC Logic mapping (Aggregated if consolidated)
             const branchProductQuantity = {};
             rawVendas.forEach(v => {
                 if (selectedVendasWarehouses.includes(parseInt(v.Armazem)) && (selectedTES.length === 0 || selectedTES.includes(v.TES))) {
                     if (!branchProductQuantity[v.Filial]) branchProductQuantity[v.Filial] = {};
-                    branchProductQuantity[v.Filial][v.Produto] = (branchProductQuantity[v.Filial][v.Produto] || 0) + v.Quantidade;
+                    // Group by NormalizedDesc for ABC curve if in consolidated mode, else group by specific code
+                    let trackingKey = globalSelectedProductNormalizedDesc ? v.NormalizedDesc : v.Produto;
+                    branchProductQuantity[v.Filial][trackingKey] = (branchProductQuantity[v.Filial][trackingKey] || 0) + v.Quantidade;
                 }
             });
 
@@ -1463,7 +1583,7 @@
 
                 let curveABC = "C";
                 const branchSales = branchProductQuantity[filialId] || {};
-                const sortedProds = Object.keys(branchSales).map(p => ({ code: p, quantity: branchSales[p] })).sort((a, b) => b.quantity - a.quantity);
+                const sortedProds = Object.keys(branchSales).map(p => ({ key: p, quantity: branchSales[p] })).sort((a, b) => b.quantity - a.quantity);
                 const totalFilialQuantity = sortedProds.reduce((sum, p) => sum + p.quantity, 0);
 
                 if (totalFilialQuantity > 0) {
@@ -1472,7 +1592,10 @@
                         const prodQty = sortedProds[i].quantity;
                         const prevCumulativePct = (cumulativeQuantity / totalFilialQuantity) * 100;
                         cumulativeQuantity += prodQty;
-                        if (sortedProds[i].code === globalSelectedProductCode) {
+                        
+                        let targetKey = globalSelectedProductNormalizedDesc ? globalSelectedProductNormalizedDesc : globalSelectedProductCode;
+                        
+                        if (sortedProds[i].key === targetKey) {
                             if (prevCumulativePct < 80) curveABC = "A";
                             else if (prevCumulativePct < 95) curveABC = "B";
                             else curveABC = "C";
@@ -1712,16 +1835,23 @@
         }
 
         function renderTablesAndLists() {
-            // Ranking
+            // Ranking (Groups by NormalizedDesc to avoid splitting identical items with (IMP))
             const topProducts = {};
             filteredVendas.forEach(v => {
-                if (!topProducts[v.Produto]) topProducts[v.Produto] = { qtd: 0, faturamento: 0 };
-                topProducts[v.Produto].qtd += v.Quantidade;
-                topProducts[v.Produto].faturamento += v['Vlr.Total'];
+                let trackKey = v.NormalizedDesc || v.Produto;
+                let trackCode = v.Produto;
+                if (!topProducts[trackKey]) topProducts[trackKey] = { codes: new Set(), qtd: 0, faturamento: 0 };
+                topProducts[trackKey].codes.add(v.Produto);
+                topProducts[trackKey].qtd += v.Quantidade;
+                topProducts[trackKey].faturamento += v['Vlr.Total'];
             });
 
             const sortedProds = Object.keys(topProducts).map(k => ({
-                id: k, qtd: topProducts[k].qtd, faturamento: topProducts[k].faturamento, mediaPrice: topProducts[k].faturamento / topProducts[k].qtd
+                id: k, 
+                codesPreview: Array.from(topProducts[k].codes).join(', '),
+                qtd: topProducts[k].qtd, 
+                faturamento: topProducts[k].faturamento, 
+                mediaPrice: topProducts[k].faturamento / topProducts[k].qtd
             })).sort((a,b) => b.faturamento - a.faturamento).slice(0, 10);
 
             const tbodyTop = document.getElementById("top-products-tbody");
@@ -1733,23 +1863,29 @@
                 sortedProds.forEach((p, idx) => {
                     const row = document.createElement("tr");
                     row.className = "hover:bg-slate-50 transition text-xs";
+                    
+                    // Determine action button based on whether it's a grouped normalized desc or single code
+                    // Since ranking now groups by normalized desc inherently, we trigger group inspection
                     row.innerHTML = `
-                        <td class="py-3 px-4 font-semibold text-slate-800 flex items-center gap-2">
-                            <span class="w-5 h-5 rounded bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] border border-slate-200">${idx+1}</span>
-                            ${p.id}
+                        <td class="py-3 px-4 font-semibold text-slate-800">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="w-5 h-5 rounded bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] border border-slate-200">${idx+1}</span>
+                                <span class="truncate max-w-[200px] block">${p.id}</span>
+                            </div>
+                            <span class="text-[9px] text-slate-400 font-normal ml-7 block truncate max-w-[200px]">CDs: ${p.codesPreview}</span>
                         </td>
-                        <td class="py-3 px-4 font-bold text-slate-600">${p.qtd.toLocaleString('pt-BR')} ${getProductUnit(p.id)}</td>
+                        <td class="py-3 px-4 font-bold text-slate-600">${p.qtd.toLocaleString('pt-BR')}</td>
                         <td class="py-3 px-4 text-emerald-600 font-bold">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.faturamento)}</td>
-                        <td class="py-3 px-4 text-slate-500">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.mediaPrice)} / ${getProductUnit(p.id)}</td>
+                        <td class="py-3 px-4 text-slate-500">${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.mediaPrice)}</td>
                         <td class="py-3 px-4 text-right">
-                            <button onclick="selectGlobalProduct('${p.id}')" class="px-2.5 py-1 bg-amazonBlue-50 hover:bg-amazonBlue-600 text-amazonBlue-700 hover:text-white rounded text-[10px] border border-amazonBlue-200 transition font-bold">Inspecionar</button>
+                            <button onclick="selectGlobalProduct(null, '${p.id.replace(/'/g, "\\'")}')" class="px-2.5 py-1 bg-amazonBlue-50 hover:bg-amazonBlue-600 text-amazonBlue-700 hover:text-white rounded text-[10px] border border-amazonBlue-200 transition font-bold">Analisar Grupo</button>
                         </td>
                     `;
                     tbodyTop.appendChild(row);
                 });
             }
 
-            // Alertas Críticos
+            // Alertas Críticos (Uses specific codes to identify physical stock gaps)
             let maxDateStr = "";
             rawVendas.forEach(v => {
                 if (v.Emissao && v.Emissao !== 'Data N/D' && v.Emissao > maxDateStr) maxDateStr = v.Emissao;
@@ -1849,7 +1985,7 @@
                     row.className = "hover:bg-slate-50 transition text-xs";
                     row.innerHTML = `
                         <td class="py-3 px-4 font-semibold text-slate-800">${s.Produto}</td>
-                        <td class="py-3 px-4 text-slate-600 font-medium">${getProductDescription(s.Produto)}</td>
+                        <td class="py-3 px-4 text-slate-600 font-medium">${s.Descricao}</td>
                         <td class="py-3 px-4 text-slate-500">${s.Grupo}</td>
                         <td class="py-3 px-4 text-amazonBlue-600 font-bold">${getFilialName(s.Filial)}</td>
                         <td class="py-3 px-4 text-slate-400">Armazém ${s.Armazem}</td>
