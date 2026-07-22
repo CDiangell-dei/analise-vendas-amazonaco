@@ -883,7 +883,14 @@
                 opt.value = id; opt.innerText = DIC_FILIAIS[id];
                 selectEl.appendChild(opt);
             });
-            selectEl.value = "1"; 
+            
+            // Restaura a unidade de destino salva ou usa a Matriz CD (1) como padrão
+            const savedBranch = localStorage.getItem('portal_target_branch');
+            if (savedBranch && DIC_FILIAIS[savedBranch]) {
+                selectEl.value = savedBranch;
+            } else {
+                selectEl.value = "1"; 
+            }
         }
 
         function buildWarehouseFilters() {
@@ -893,9 +900,22 @@
             rawVendas.forEach(v => { if(v.Armazem) setVendas.add(parseInt(v.Armazem)); });
             
             activeSaldosWarehouses = Array.from(setSaldos).sort((a, b) => a - b);
-            selectedSaldosWarehouses = [...activeSaldosWarehouses];
+            const savedSaldos = localStorage.getItem('portal_selected_saldos_warehouses');
+            if (savedSaldos) {
+                const parsed = JSON.parse(savedSaldos);
+                selectedSaldosWarehouses = parsed.filter(w => activeSaldosWarehouses.includes(w));
+            } else {
+                selectedSaldosWarehouses = [...activeSaldosWarehouses];
+            }
+            
             activeVendasWarehouses = Array.from(setVendas).sort((a, b) => a - b);
-            selectedVendasWarehouses = [...activeVendasWarehouses];
+            const savedVendas = localStorage.getItem('portal_selected_vendas_warehouses');
+            if (savedVendas) {
+                const parsed = JSON.parse(savedVendas);
+                selectedVendasWarehouses = parsed.filter(w => activeVendasWarehouses.includes(w));
+            } else {
+                selectedVendasWarehouses = [...activeVendasWarehouses];
+            }
             
             renderWarehouseCheckboxes('saldos');
             renderWarehouseCheckboxes('vendas');
@@ -905,7 +925,16 @@
             const setTES = new Set();
             rawVendas.forEach(v => { if(v.TES) setTES.add(v.TES); });
             activeTES = Array.from(setTES).sort();
-            selectedTES = [...activeTES]; 
+            
+            const savedTES = localStorage.getItem('portal_selected_tes');
+            if (savedTES) {
+                const parsed = JSON.parse(savedTES);
+                // Garante que só mantenha as TES salvas que ainda existem na planilha atual
+                selectedTES = parsed.filter(t => activeTES.includes(t));
+            } else {
+                selectedTES = [...activeTES]; 
+            }
+            
             renderTESCheckboxes();
         }
 
@@ -939,6 +968,7 @@
             } else {
                 selectedTES = selectedTES.filter(v => v !== value);
             }
+            localStorage.setItem('portal_selected_tes', JSON.stringify(selectedTES));
             updateTESText();
             applyFilters();
             recalculateSimulation();
@@ -948,6 +978,7 @@
             selectedTES = selectAll ? [...activeTES] : [];
             const checkboxes = document.querySelectorAll(`#tes-checkboxes-container input[type='checkbox']`);
             checkboxes.forEach(cb => { cb.checked = selectAll; });
+            localStorage.setItem('portal_selected_tes', JSON.stringify(selectedTES));
             updateTESText();
             applyFilters();
             recalculateSimulation();
@@ -976,7 +1007,15 @@
             rawSaldos.forEach(s => { if(s.Filial) setBranches.add(parseInt(s.Filial)); });
             rawVendas.forEach(v => { if(v.Filial) setBranches.add(parseInt(v.Filial)); });
             activeBranches = Array.from(setBranches).sort((a, b) => a - b);
-            selectedBranches = [...activeBranches];
+            
+            const savedBranches = localStorage.getItem('portal_selected_branches');
+            if (savedBranches) {
+                const parsed = JSON.parse(savedBranches);
+                selectedBranches = parsed.filter(b => activeBranches.includes(b));
+            } else {
+                selectedBranches = [...activeBranches];
+            }
+            
             renderBranchCheckboxes();
         }
 
@@ -1010,6 +1049,7 @@
             } else {
                 selectedBranches = selectedBranches.filter(v => v !== value);
             }
+            localStorage.setItem('portal_selected_branches', JSON.stringify(selectedBranches));
             updateBranchText();
             applyFilters();
             recalculateSimulation();
@@ -1019,6 +1059,7 @@
             selectedBranches = selectAll ? [...activeBranches] : [];
             const checkboxes = document.querySelectorAll(`#branch-checkboxes-container input[type='checkbox']`);
             checkboxes.forEach(cb => { cb.checked = selectAll; });
+            localStorage.setItem('portal_selected_branches', JSON.stringify(selectedBranches));
             updateBranchText();
             applyFilters();
             recalculateSimulation();
@@ -1072,9 +1113,11 @@
             if (type === 'saldos') {
                 if (checkbox.checked) { if (!selectedSaldosWarehouses.includes(value)) selectedSaldosWarehouses.push(value); } 
                 else { selectedSaldosWarehouses = selectedSaldosWarehouses.filter(v => v !== value); }
+                localStorage.setItem('portal_selected_saldos_warehouses', JSON.stringify(selectedSaldosWarehouses));
             } else {
                 if (checkbox.checked) { if (!selectedVendasWarehouses.includes(value)) selectedVendasWarehouses.push(value); } 
                 else { selectedVendasWarehouses = selectedVendasWarehouses.filter(v => v !== value); }
+                localStorage.setItem('portal_selected_vendas_warehouses', JSON.stringify(selectedVendasWarehouses));
             }
             updateWarehouseText(type);
             applyFilters();
@@ -1084,8 +1127,10 @@
         function selectWarehouses(type, selectAll) {
             if (type === 'saldos') {
                 selectedSaldosWarehouses = selectAll ? [...activeSaldosWarehouses] : [];
+                localStorage.setItem('portal_selected_saldos_warehouses', JSON.stringify(selectedSaldosWarehouses));
             } else {
                 selectedVendasWarehouses = selectAll ? [...activeVendasWarehouses] : [];
+                localStorage.setItem('portal_selected_vendas_warehouses', JSON.stringify(selectedVendasWarehouses));
             }
             const checkboxes = document.querySelectorAll(`#${type}-warehouse-checkboxes-container input[type='checkbox']`);
             checkboxes.forEach(cb => { cb.checked = selectAll; });
@@ -1550,6 +1595,9 @@
         function recalculateSimulation() {
             const qtyToRequest = parseFloat(document.getElementById("sim-qty").value) || 0;
             const targetBranch = parseInt(document.getElementById("sim-target-branch").value);
+            
+            // Salva a unidade de simulação escolhida no navegador
+            localStorage.setItem('portal_target_branch', targetBranch);
 
             if (!globalSelectedProductCode && !globalSelectedProductNormalizedDesc) {
                 document.getElementById("sim-tbody").innerHTML = `<tr><td colspan="10" class="py-6 text-center text-slate-400">Selecione um código de produto na busca superior para iniciar a análise.</td></tr>`;
